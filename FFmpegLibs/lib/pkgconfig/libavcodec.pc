@@ -1,0 +1,14 @@
+prefix=/Users/djmc/FFmpeg/build-visionos/ffmpeg-install
+exec_prefix=${prefix}
+libdir=/Users/djmc/FFmpeg/build-visionos/ffmpeg-install/lib
+includedir=/Users/djmc/FFmpeg/build-visionos/ffmpeg-install/include
+
+Name: libavcodec
+Description: FFmpeg codec library
+Version: 61.19.101
+Requires: libswresample >= 5.3.100, libavutil >= 59.39.100
+Requires.private: 
+Conflicts:
+Libs: -L${libdir}  -lavcodec -pthread -liconv -lm -framework AudioToolbox -lz
+Libs.private: 
+Cflags: -I${includedir}

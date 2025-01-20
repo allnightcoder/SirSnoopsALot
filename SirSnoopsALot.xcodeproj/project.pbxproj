@@ -50,6 +50,11 @@
 			path = SirSnoopsALotTests;
 			sourceTree = "<group>";
 		};
+		13E708892D3F175A004283E8 /* FFmpegLibs */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FFmpegLibs;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +79,7 @@
 		13E706C02D3EE125004283E8 = {
 			isa = PBXGroup;
 			children = (
+				13E708892D3F175A004283E8 /* FFmpegLibs */,
 				13E706CB2D3EE125004283E8 /* SirSnoopsALot */,
 				13E706CC2D3EE125004283E8 /* Packages */,
 				13E706E12D3EE126004283E8 /* SirSnoopsALotTests */,
@@ -115,6 +121,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				13E706CB2D3EE125004283E8 /* SirSnoopsALot */,
+				13E708892D3F175A004283E8 /* FFmpegLibs */,
 			);
 			name = SirSnoopsALot;
 			packageProductDependencies = (
@@ -240,16 +247,23 @@
 				DEVELOPMENT_TEAM = 6FK3PMDHV6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				"HEADER_SEARCH_PATHS[arch=*]" = "$(PROJECT_DIR)/FFmpegLibs/include";
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/SirSnoopsALot/FFmpegLibs/lib",
+					"$(PROJECT_DIR)/FFmpegLibs/lib",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = FFmpegLibs/include/FFmpegBridge.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 			};
@@ -266,16 +280,23 @@
 				DEVELOPMENT_TEAM = 6FK3PMDHV6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				"HEADER_SEARCH_PATHS[arch=*]" = "$(PROJECT_DIR)/FFmpegLibs/include";
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/SirSnoopsALot/FFmpegLibs/lib",
+					"$(PROJECT_DIR)/FFmpegLibs/lib",
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = FFmpegLibs/include/FFmpegBridge.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 			};
