@@ -4,6 +4,7 @@ import CoreGraphics
 
 class RTSPStreamManager: ObservableObject {
     @Published var currentFrame: UIImage?
+    @Published var currentStreamURL: String?
     private var formatContext: UnsafeMutablePointer<AVFormatContext>?
     private var codecContext: UnsafeMutablePointer<AVCodecContext>?
     private var frame: UnsafeMutablePointer<AVFrame>?
@@ -11,6 +12,7 @@ class RTSPStreamManager: ObservableObject {
     private var isRunning = false
     
     func startStream(url: String) {
+        currentStreamURL = url
         guard !url.contains("Not set") else { return }
         
         // Initialize FFmpeg components
@@ -208,6 +210,10 @@ class RTSPStreamManager: ObservableObject {
     
     func stopStream() {
         isRunning = false
+        currentStreamURL = nil
+        
+        // Wait briefly to ensure the decoding loop has stopped
+        Thread.sleep(forTimeInterval: 0.1)
         
         if let codecContext = codecContext {
             var tempCodecContext: UnsafeMutablePointer<AVCodecContext>? = codecContext
@@ -228,6 +234,11 @@ class RTSPStreamManager: ObservableObject {
         if let packet = packet {
             var tempPacket: UnsafeMutablePointer<AVPacket>? = packet
             av_packet_free(&tempPacket)
+        }
+        
+        // Clear the current frame
+        DispatchQueue.main.async {
+            self.currentFrame = nil
         }
         
         codecContext = nil
