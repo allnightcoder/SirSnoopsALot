@@ -8,34 +8,54 @@ struct ContentView: View {
     @State private var cameras: [CameraConfig] = []
     @State private var selectedCamera: CameraConfig?
     @StateObject private var streamManager = RTSPStreamManager()
+    @State private var isSidebarVisible = true
     
     var body: some View {
-        VStack {
-            if let image = streamManager.currentFrame {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                Text("No stream available")
-                    .foregroundColor(.gray)
-            }
-            
-            if let camera = selectedCamera {
-                Text("Camera: \(camera.name)")
-                    .font(.caption)
-                    .padding()
-            }
-            
-            Picker("Select Camera", selection: $selectedCamera) {
-                ForEach(cameras, id: \.order) { camera in
-                    Text(camera.name).tag(Optional(camera))
+        NavigationSplitView {
+            // Sidebar
+            List(cameras, id: \.order, selection: $selectedCamera) { camera in
+                NavigationLink(value: camera) {
+                    VStack(alignment: .leading) {
+                        Text(camera.name)
+                            .font(.headline)
+                        Text(camera.url)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
                 }
             }
-            .pickerStyle(.segmented)
-            .padding()
+            .navigationTitle("Cameras")
+            .listStyle(.sidebar)
+        } detail: {
+            // Main Content
+            ZStack {
+                if let image = streamManager.currentFrame {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ContentUnavailableView {
+                        Label("No Stream", systemImage: "video.slash")
+                    } description: {
+                        Text("Select a camera from the sidebar to begin streaming")
+                    }
+                }
+                
+                if let camera = selectedCamera {
+                    VStack {
+                        Spacer()
+                        Text(camera.name)
+                            .font(.caption)
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                            .padding(.bottom)
+                    }
+                }
+            }
         }
-        .padding()
         .onAppear {
             loadCameras()
         }
