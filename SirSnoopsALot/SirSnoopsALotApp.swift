@@ -18,15 +18,16 @@ struct SirSnoopsALotApp: App {
     }
     
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "Main") {
             ContentView()
         }
         
-        WindowGroup(for: CameraConfig.self) { $camera in
+        WindowGroup(id: "Other", for: CameraConfig.self) { $camera in
             if let camera = camera {
                 FloatingCameraView(camera: camera)
             }
         }
+        .handlesExternalEvents(matching: ["openCamera"])
     }
     
     private func setupDefaultCamerasIfNeeded() {

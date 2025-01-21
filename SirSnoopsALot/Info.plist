@@ -18,5 +18,26 @@
 		<key>UISceneConfigurations</key>
 		<dict/>
 	</dict>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>net.virtual-chaos.sirsnoopsalot.camera</string>
+			<key>UTTypeDescription</key>
+			<string>Camera Configuration</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+				<string>public.content</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>camera</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

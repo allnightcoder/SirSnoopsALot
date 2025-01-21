@@ -2,6 +2,19 @@ import Foundation
 import UIKit
 import CoreGraphics
 
+// Add FFmpeg imports and constants
+let AVERROR_EOF: Int32 = -541478725  // -MKTAG('E','O','F',' ')
+func AVERROR(_ errno: Int32) -> Int32 {
+    return -errno
+}
+
+// Helper function since av_err2str is a macro in C
+func av_err2str(_ errnum: Int32) -> String {
+    var buffer = [Int8](repeating: 0, count: 64)
+    av_strerror(errnum, &buffer, 64)
+    return String(cString: buffer)
+}
+
 class RTSPStreamManager: ObservableObject {
     @Published var currentFrame: UIImage?
     @Published var currentStreamURL: String?
@@ -99,38 +112,42 @@ class RTSPStreamManager: ObservableObject {
               let frame = frame,
               let packet = packet else { return false }
         
-        // Wrap the potentially dangerous call in a do-catch
-        do {
-            let readResult = av_read_frame(formatContext, packet)
-            if readResult < 0 {
-                // Handle specific error cases
-                switch readResult {
-                case -541478725: // AVERROR_EOF (-MKTAG('E','O','F',' '))
-                    print("RTSPStreamManager - End of stream reached")
-                    stopStream()
-                case -11: // EAGAIN
-                    // Resource temporarily unavailable, can retry
-                    return false
-                default:
-                    print("RTSPStreamManager - Error reading frame: \(readResult)")
-                    return false
-                }
+        let readResult = av_read_frame(formatContext, packet)
+        if readResult < 0 {
+            // Handle specific error cases
+            switch readResult {
+            case AVERROR_EOF:  // Now both sides of comparison are Int32
+                print("RTSPStreamManager - End of stream reached")
+                stopStream()
+            case AVERROR(EAGAIN):
+                // Resource temporarily unavailable, can retry
+                return false
+            default:
+                let errorString = String(cString: av_err2str(readResult))
+                print("RTSPStreamManager - Error reading frame: \(errorString)")
                 return false
             }
-            
-            let sendResult = avcodec_send_packet(codecContext, packet)
-            if sendResult >= 0 {
-                let receiveResult = avcodec_receive_frame(codecContext, frame)
-                if receiveResult >= 0 {
-                    convertFrameToImage(frame)
-                }
-            }
-            av_packet_unref(packet)
-            return true
-        } catch {
-            print("RTSPStreamManager - Exception while reading frame: \(error)")
             return false
         }
+        
+        let sendResult = avcodec_send_packet(codecContext, packet)
+        if sendResult < 0 {
+            let errorString = String(cString: av_err2str(sendResult))
+            print("RTSPStreamManager - Error sending packet: \(errorString)")
+            av_packet_unref(packet)
+            return false
+        }
+        
+        let receiveResult = avcodec_receive_frame(codecContext, frame)
+        if receiveResult >= 0 {
+            convertFrameToImage(frame)
+        } else if receiveResult != AVERROR(EAGAIN) {
+            let errorString = String(cString: av_err2str(receiveResult))
+            print("RTSPStreamManager - Error receiving frame: \(errorString)")
+        }
+        
+        av_packet_unref(packet)
+        return true
     }
     
     private func convertFrameToImage(_ frame: UnsafeMutablePointer<AVFrame>) {

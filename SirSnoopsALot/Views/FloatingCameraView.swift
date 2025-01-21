@@ -29,5 +29,10 @@ struct FloatingCameraView: View {
             streamManager.stopStream()
             print("FloatingCameraView - Stream stop completed")
         }
+        .onContinueUserActivity("drag") { activity in
+            if let camera = activity.userInfo?["camera"] as? CameraConfig {
+                print(camera.url)
+            }
+        }
     }
 }
