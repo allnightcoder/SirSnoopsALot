@@ -16,7 +16,6 @@ struct CameraListView: View {
     
     var body: some View {
         List(localCameras, id: \.order, selection: $selectedCamera) { camera in
-            let _ = print("CameraListView - Rendering camera: \(camera.name)")
             NavigationLink(value: camera) {
                 CameraListItemView(
                     camera: camera,

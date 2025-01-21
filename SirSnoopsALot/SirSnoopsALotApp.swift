@@ -31,7 +31,7 @@ struct SirSnoopsALotApp: App {
     
     private func setupDefaultCamerasIfNeeded() {
         let userDefaults = UserDefaults.standard
-        let resetSettings = true  // Changed to false - only set to true temporarily when you want to force reset
+        let resetSettings = false  // Changed to false - only set to true temporarily when you want to force reset
         
         // Check if cameras array exists
         let existingData = userDefaults.data(forKey: "cameras")
