@@ -1,6 +1,8 @@
 import SwiftUI
+import os
 
 struct CameraStreamView: View {
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CameraStreamView", category: "UI")
     let camera: CameraConfig?
     let currentFrame: UIImage?
     
@@ -30,6 +32,20 @@ struct CameraStreamView: View {
                         .padding(.bottom)
                 }
             }
+        }
+        .onAppear {
+            logger.info("CameraStreamView appeared - Camera: \(camera?.name ?? "none")")
+            if let currentFrame = currentFrame {
+                logger.debug("Displaying camera frame")
+            } else {
+                logger.info("No camera frame available, showing placeholder")
+            }
+            if let camera = camera {
+                logger.debug("Showing camera overlay for: \(camera.name)")
+            }
+        }
+        .onDisappear {
+            logger.info("CameraStreamView disappeared")
         }
     }
 }

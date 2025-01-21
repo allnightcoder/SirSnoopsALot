@@ -10,6 +10,9 @@ struct CameraListView: View {
                 CameraListItemView(camera: camera)
             }
         }
+        .onChange(of: selectedCamera) { oldValue, newValue in
+            print("Camera selection changed - Old: \(String(describing: oldValue?.name)), New: \(String(describing: newValue?.name))")
+        }
         .navigationTitle("Cameras")
         .listStyle(.sidebar)
     }
@@ -31,8 +34,12 @@ struct CameraListItemView: View {
         }
         .contextMenu {
             Button(action: {
+                print("Attempting to open camera in new window: \(camera.name)")
                 if !windowManager.isCameraOpen(camera.url) {
+                    print("Opening new window for camera: \(camera.name)")
                     openWindow(value: camera)
+                } else {
+                    print("Window already open for camera: \(camera.name)")
                 }
             }) {
                 Label("Open in New Window", systemImage: "rectangle.on.rectangle")
@@ -40,16 +47,21 @@ struct CameraListItemView: View {
             .disabled(windowManager.isCameraOpen(camera.url))
             
             Button(action: {
+                print("Edit button tapped for camera: \(camera.name)")
                 // Edit action
             }) {
                 Label("Edit", systemImage: "pencil")
             }
             
             Button(role: .destructive, action: {
+                print("Delete button tapped for camera: \(camera.name)")
                 // Delete action
             }) {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .onAppear {
+            print("CameraListItemView appeared for camera: \(camera.name)")
         }
     }
 }

@@ -209,6 +209,9 @@ class RTSPStreamManager: ObservableObject {
     }
     
     func stopStream() {
+        guard currentStreamURL != nil else { return }
+        
+        print("RTSP stopping stream: \(currentStreamURL ?? "None")")
         isRunning = false
         currentStreamURL = nil
         
