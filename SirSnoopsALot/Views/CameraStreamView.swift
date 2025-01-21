@@ -52,7 +52,7 @@ struct CameraStreamView: View {
 
 #Preview {
     CameraStreamView(
-        camera: CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", order: 0),
+        camera: CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0),
         currentFrame: nil
     )
 } 

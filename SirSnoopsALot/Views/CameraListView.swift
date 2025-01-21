@@ -31,7 +31,7 @@ struct CameraListItemView: View {
         VStack(alignment: .leading) {
             Text(camera.name)
                 .font(.headline)
-            Text(camera.url)
+            Text(camera.description)
                 .font(.caption)
                 .foregroundColor(.gray)
                 .lineLimit(1)
@@ -68,7 +68,7 @@ struct CameraListItemView: View {
     NavigationStack {
         CameraListView(
             cameras: [
-                CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", order: 0)
+                CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)
             ],
             selectedCamera: .constant(nil),
             onOpenInNewWindow: { _ in }

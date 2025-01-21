@@ -84,7 +84,7 @@ class RTSPStreamManager: ObservableObject {
             
             while self.isRunning {
                 self.readNextFrame()
-                Thread.sleep(forTimeInterval: 0.033) // ~30fps
+                Thread.sleep(forTimeInterval: 0.01) // ~10fps
             }
         }
     }
