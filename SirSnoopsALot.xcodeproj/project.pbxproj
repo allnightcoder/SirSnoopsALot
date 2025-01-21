@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		13E706CF2D3EE125004283E8 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 13E706CE2D3EE125004283E8 /* RealityKitContent */; };
+		13E708B42D3F1C8D004283E8 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B32D3F1C8D004283E8 /* libbz2.tbd */; };
+		13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B52D3F1D13004283E8 /* libz.tbd */; };
+		13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B72D3F1D1D004283E8 /* libiconv.tbd */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -24,6 +27,9 @@
 		13E706C92D3EE125004283E8 /* SirSnoopsALot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SirSnoopsALot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13E706CD2D3EE125004283E8 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		13E706DE2D3EE126004283E8 /* SirSnoopsALotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SirSnoopsALotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		13E708B32D3F1C8D004283E8 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
+		13E708B52D3F1D13004283E8 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+		13E708B72D3F1D1D004283E8 /* libiconv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libiconv.tbd; path = usr/lib/libiconv.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -62,6 +68,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */,
+				13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */,
+				13E708B42D3F1C8D004283E8 /* libbz2.tbd in Frameworks */,
 				13E706CF2D3EE125004283E8 /* RealityKitContent in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -83,6 +92,7 @@
 				13E706CB2D3EE125004283E8 /* SirSnoopsALot */,
 				13E706CC2D3EE125004283E8 /* Packages */,
 				13E706E12D3EE126004283E8 /* SirSnoopsALotTests */,
+				13E708B22D3F1C8D004283E8 /* Frameworks */,
 				13E706CA2D3EE125004283E8 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -102,6 +112,16 @@
 				13E706CD2D3EE125004283E8 /* RealityKitContent */,
 			);
 			path = Packages;
+			sourceTree = "<group>";
+		};
+		13E708B22D3F1C8D004283E8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				13E708B72D3F1D1D004283E8 /* libiconv.tbd */,
+				13E708B52D3F1D13004283E8 /* libz.tbd */,
+				13E708B32D3F1C8D004283E8 /* libbz2.tbd */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -259,6 +279,11 @@
 					"$(PROJECT_DIR)/FFmpegLibs/lib",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-lz",
+					"-liconv",
+					"-lbz2",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -292,6 +317,11 @@
 					"$(PROJECT_DIR)/FFmpegLibs/lib",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-lz",
+					"-liconv",
+					"-lbz2",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
