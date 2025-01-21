@@ -34,18 +34,18 @@ struct CameraStreamView: View {
             }
         }
         .onAppear {
-            logger.info("CameraStreamView appeared - Camera: \(camera?.name ?? "none")")
+            logger.info("CameraStreamView - appeared - Camera: \(camera?.name ?? "none")")
             if let currentFrame = currentFrame {
-                logger.debug("Displaying camera frame")
+                logger.debug("CameraStreamView - Displaying camera frame")
             } else {
-                logger.info("No camera frame available, showing placeholder")
+                logger.info("CameraStreamView - No camera frame available, showing placeholder")
             }
             if let camera = camera {
-                logger.debug("Showing camera overlay for: \(camera.name)")
+                logger.debug("CameraStreamView - Showing camera overlay for: \(camera.name)")
             }
         }
         .onDisappear {
-            logger.info("CameraStreamView disappeared")
+            logger.info("CameraStreamView - disappeared")
         }
     }
 }
