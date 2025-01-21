@@ -18,13 +18,10 @@ struct SirSnoopsALotApp: App {
     
     private func setupDefaultCamerasIfNeeded() {
         let userDefaults = UserDefaults.standard
-        
-        // Remove old camera URL keys if they exist
-        userDefaults.removeObject(forKey: "camera1URL")
-        userDefaults.removeObject(forKey: "camera2URL")
+        let resetSettings = false // Overwrite userDefaults with CameraConfig.swift settings
         
         // Check if cameras array exists
-        if userDefaults.data(forKey: "cameras") == nil {
+        if resetSettings || userDefaults.data(forKey: "cameras") == nil {
             if let encodedData = try? JSONEncoder().encode(DefaultCameraConfigs.cameras) {
                 userDefaults.set(encodedData, forKey: "cameras")
                 print("Default cameras configuration saved to UserDefaults.")
