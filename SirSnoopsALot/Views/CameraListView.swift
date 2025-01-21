@@ -20,7 +20,8 @@ struct CameraListView: View {
             NavigationLink(value: camera) {
                 CameraListItemView(
                     camera: camera,
-                    onOpenInNewWindow: onOpenInNewWindow
+                    onOpenInNewWindow: onOpenInNewWindow,
+                    cameras: $localCameras
                 )
             }
         }
@@ -55,6 +56,8 @@ struct CameraListItemView: View {
     let camera: CameraConfig
     let onOpenInNewWindow: (CameraConfig) -> Void
     @Environment(\.openWindow) private var openWindow
+    @Binding var cameras: [CameraConfig]
+    @State private var showingEditCamera = false
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -75,7 +78,7 @@ struct CameraListItemView: View {
             
             Button(action: {
                 print("CameraListItemView - Edit button tapped for camera: \(camera.name)")
-                // Edit action
+                showingEditCamera = true
             }) {
                 Label("Edit", systemImage: "pencil")
             }
@@ -86,6 +89,9 @@ struct CameraListItemView: View {
             }) {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .sheet(isPresented: $showingEditCamera) {
+            AddCameraView(cameras: $cameras, editingCamera: camera)
         }
         .onAppear {
             print("CameraListItemView - Appeared for camera: \(camera.name)")
