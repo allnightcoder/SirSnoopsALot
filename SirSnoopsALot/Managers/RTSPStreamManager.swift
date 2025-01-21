@@ -83,25 +83,53 @@ class RTSPStreamManager: ObservableObject {
             guard let self = self else { return }
             
             while self.isRunning {
-                self.readNextFrame()
+                if !self.readNextFrame() {
+                    // If reading fails, wait a bit longer before retry
+                    Thread.sleep(forTimeInterval: 0.5)
+                    continue
+                }
                 Thread.sleep(forTimeInterval: 0.01) // ~10fps
             }
         }
     }
     
-    private func readNextFrame() {
+    private func readNextFrame() -> Bool {
         guard let formatContext = formatContext,
               let codecContext = codecContext,
               let frame = frame,
-              let packet = packet else { return }
+              let packet = packet else { return false }
         
-        if av_read_frame(formatContext, packet) >= 0 {
-            if avcodec_send_packet(codecContext, packet) >= 0 {
-                if avcodec_receive_frame(codecContext, frame) >= 0 {
+        // Wrap the potentially dangerous call in a do-catch
+        do {
+            let readResult = av_read_frame(formatContext, packet)
+            if readResult < 0 {
+                // Handle specific error cases
+                switch readResult {
+                case -541478725: // AVERROR_EOF (-MKTAG('E','O','F',' '))
+                    print("RTSPStreamManager - End of stream reached")
+                    stopStream()
+                case -11: // EAGAIN
+                    // Resource temporarily unavailable, can retry
+                    return false
+                default:
+                    print("RTSPStreamManager - Error reading frame: \(readResult)")
+                    return false
+                }
+                return false
+            }
+            
+            let sendResult = avcodec_send_packet(codecContext, packet)
+            if sendResult >= 0 {
+                let receiveResult = avcodec_receive_frame(codecContext, frame)
+                if receiveResult >= 0 {
                     convertFrameToImage(frame)
                 }
             }
             av_packet_unref(packet)
+            return true
+        } catch {
+            print("RTSPStreamManager - Exception while reading frame: \(error)")
+            return false
         }
     }
     
