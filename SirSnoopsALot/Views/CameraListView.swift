@@ -27,6 +27,25 @@ struct CameraListItemView: View {
                 .foregroundColor(.gray)
                 .lineLimit(1)
         }
+        .contextMenu {
+            Button(action: {
+                // Open in new window action
+            }) {
+                Label("Open in New Window", systemImage: "rectangle.on.rectangle")
+            }
+            
+            Button(action: {
+                // Edit action
+            }) {
+                Label("Edit", systemImage: "pencil")
+            }
+            
+            Button(role: .destructive, action: {
+                // Delete action
+            }) {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 }
 
