@@ -17,6 +17,8 @@ struct CameraListView: View {
 
 struct CameraListItemView: View {
     let camera: CameraConfig
+    @Environment(\.openWindow) private var openWindow
+    @ObservedObject private var windowManager = WindowManager.shared
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -29,10 +31,13 @@ struct CameraListItemView: View {
         }
         .contextMenu {
             Button(action: {
-                // Open in new window action
+                if !windowManager.isCameraOpen(camera.url) {
+                    openWindow(value: camera)
+                }
             }) {
                 Label("Open in New Window", systemImage: "rectangle.on.rectangle")
             }
+            .disabled(windowManager.isCameraOpen(camera.url))
             
             Button(action: {
                 // Edit action

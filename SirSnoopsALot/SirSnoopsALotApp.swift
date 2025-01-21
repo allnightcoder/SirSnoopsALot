@@ -4,15 +4,28 @@ import SwiftUI
 
 @main
 struct SirSnoopsALotApp: App {
+    private let enableFFmpegLogging = false
+
     init() {
         setupDefaultCamerasIfNeeded()
+        
+        if !enableFFmpegLogging {
+            av_log_set_level(AV_LOG_QUIET)
+        }
+        
         let version = String(cString: av_version_info())
-        print("FFmpeg version: \(version)")
+        print("App Init - FFmpeg version: \(version)")
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        
+        WindowGroup(for: CameraConfig.self) { $camera in
+            if let camera = camera {
+                StandaloneCameraView(camera: camera)
+            }
         }
     }
     
