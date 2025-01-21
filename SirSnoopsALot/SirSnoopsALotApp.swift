@@ -31,10 +31,17 @@ struct SirSnoopsALotApp: App {
     
     private func setupDefaultCamerasIfNeeded() {
         let userDefaults = UserDefaults.standard
-        let resetSettings = false // Overwrite userDefaults with CameraConfig.swift settings
+        let resetSettings = true  // Changed to false - only set to true temporarily when you want to force reset
         
         // Check if cameras array exists
-        if resetSettings || userDefaults.data(forKey: "cameras") == nil {
+        let existingData = userDefaults.data(forKey: "cameras")
+        if resetSettings {
+            print("SirSnoopsALotApp - Resetting camera configuration due to resetSettings flag")
+        } else if existingData == nil {
+            print("SirSnoopsALotApp - No existing camera configuration found in UserDefaults")
+        }
+        
+        if resetSettings || existingData == nil {
             if let encodedData = try? JSONEncoder().encode(DefaultCameraConfigs.cameras) {
                 userDefaults.set(encodedData, forKey: "cameras")
                 print("SirSnoopsALotApp - Default cameras configuration saved to UserDefaults.")

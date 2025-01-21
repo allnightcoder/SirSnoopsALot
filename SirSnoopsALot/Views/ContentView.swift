@@ -50,9 +50,12 @@ struct ContentView: View {
     
     private func loadCameras() {
         print("ContentView - Loading cameras from UserDefaults")
+        print("ContentView - UserDefaults data exists: \(UserDefaults.standard.data(forKey: "cameras") != nil)")
+        
         if let data = UserDefaults.standard.data(forKey: "cameras") {
             do {
                 let decodedCameras = try JSONDecoder().decode([CameraConfig].self, from: data)
+                print("ContentView - Decoded \(decodedCameras.count) cameras")
                 cameras = decodedCameras.sorted(by: { $0.order < $1.order })
                 print("ContentView - Successfully loaded \(cameras.count) cameras")
                 selectedCamera = cameras.first
@@ -63,6 +66,7 @@ struct ContentView: View {
                 }
             } catch {
                 print("ContentView - Error decoding cameras: \(error)")
+                print("ContentView - Detailed error: \(error.localizedDescription)")
             }
         } else {
             print("ContentView - No camera data found in UserDefaults")
