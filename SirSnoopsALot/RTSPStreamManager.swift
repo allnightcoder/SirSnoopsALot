@@ -18,13 +18,13 @@ class RTSPStreamManager: ObservableObject {
         // Initialize FFmpeg components
         var formatContext: UnsafeMutablePointer<AVFormatContext>? = nil
         guard avformat_open_input(&formatContext, url, nil, nil) >= 0 else {
-            print("Failed to open input")
+            print("RTSPStreamManager - Failed to open input")
             return
         }
         self.formatContext = formatContext
         
         guard avformat_find_stream_info(formatContext, nil) >= 0 else {
-            print("Failed to find stream info")
+            print("RTSPStreamManager - Failed to find stream info")
             return
         }
         
@@ -40,33 +40,33 @@ class RTSPStreamManager: ObservableObject {
         }
         
         guard videoStreamIndex != -1 else {
-            print("No video stream found")
+            print("RTSPStreamManager - No video stream found")
             return
         }
         
         // Set up decoder
         guard let formatCtx = formatContext,
               let codecParams = formatCtx.pointee.streams[Int(videoStreamIndex)]?.pointee.codecpar else {
-            print("Failed to get codec parameters")
+            print("RTSPStreamManager - Failed to get codec parameters")
             return
         }
         guard let codec = avcodec_find_decoder(codecParams.pointee.codec_id) else {
-            print("Failed to find decoder")
+            print("RTSPStreamManager - Failed to find decoder")
             return
         }
         
         codecContext = avcodec_alloc_context3(codec)
         guard let codecCtx = codecContext else {
-            print("Failed to allocate codec context")
+            print("RTSPStreamManager - Failed to allocate codec context")
             return
         }
         guard avcodec_parameters_to_context(codecCtx, codecParams) >= 0 else {
-            print("Failed to set codec params")
+            print("RTSPStreamManager - Failed to set codec params")
             return
         }
         
         guard avcodec_open2(codecCtx, codec, nil) >= 0 else {
-            print("Failed to open codec")
+            print("RTSPStreamManager - Failed to open codec")
             return
         }
         
@@ -211,7 +211,7 @@ class RTSPStreamManager: ObservableObject {
     func stopStream() {
         guard currentStreamURL != nil else { return }
         
-        print("RTSP stopping stream: \(currentStreamURL ?? "None")")
+        print("RTSPStreamManager - Stopping stream: \(currentStreamURL ?? "None")")
         isRunning = false
         currentStreamURL = nil
         

@@ -3,15 +3,19 @@ import SwiftUI
 struct CameraListView: View {
     let cameras: [CameraConfig]
     @Binding var selectedCamera: CameraConfig?
+    let onOpenInNewWindow: (CameraConfig) -> Void
     
     var body: some View {
         List(cameras, id: \.order, selection: $selectedCamera) { camera in
             NavigationLink(value: camera) {
-                CameraListItemView(camera: camera)
+                CameraListItemView(
+                    camera: camera,
+                    onOpenInNewWindow: onOpenInNewWindow
+                )
             }
         }
         .onChange(of: selectedCamera) { oldValue, newValue in
-            print("Camera selection changed - Old: \(String(describing: oldValue?.name)), New: \(String(describing: newValue?.name))")
+            print("CameraListView - Camera selection changed - Old: \(String(describing: oldValue?.name)), New: \(String(describing: newValue?.name))")
         }
         .navigationTitle("Cameras")
         .listStyle(.sidebar)
@@ -20,8 +24,8 @@ struct CameraListView: View {
 
 struct CameraListItemView: View {
     let camera: CameraConfig
+    let onOpenInNewWindow: (CameraConfig) -> Void
     @Environment(\.openWindow) private var openWindow
-    @ObservedObject private var windowManager = WindowManager.shared
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -34,34 +38,28 @@ struct CameraListItemView: View {
         }
         .contextMenu {
             Button(action: {
-                print("Attempting to open camera in new window: \(camera.name)")
-                if !windowManager.isCameraOpen(camera.url) {
-                    print("Opening new window for camera: \(camera.name)")
-                    openWindow(value: camera)
-                } else {
-                    print("Window already open for camera: \(camera.name)")
-                }
+                print("CameraListItemView - Attempting to open camera in new window: \(camera.name)")
+                onOpenInNewWindow(camera)
             }) {
                 Label("Open in New Window", systemImage: "rectangle.on.rectangle")
             }
-            .disabled(windowManager.isCameraOpen(camera.url))
             
             Button(action: {
-                print("Edit button tapped for camera: \(camera.name)")
+                print("CameraListItemView - Edit button tapped for camera: \(camera.name)")
                 // Edit action
             }) {
                 Label("Edit", systemImage: "pencil")
             }
             
             Button(role: .destructive, action: {
-                print("Delete button tapped for camera: \(camera.name)")
+                print("CameraListItemView - Delete button tapped for camera: \(camera.name)")
                 // Delete action
             }) {
                 Label("Delete", systemImage: "trash")
             }
         }
         .onAppear {
-            print("CameraListItemView appeared for camera: \(camera.name)")
+            print("CameraListItemView - Appeared for camera: \(camera.name)")
         }
     }
 }
@@ -72,7 +70,8 @@ struct CameraListItemView: View {
             cameras: [
                 CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", order: 0)
             ],
-            selectedCamera: .constant(nil)
+            selectedCamera: .constant(nil),
+            onOpenInNewWindow: { _ in }
         )
     }
 } 

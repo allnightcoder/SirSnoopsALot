@@ -14,7 +14,7 @@ struct SirSnoopsALotApp: App {
         }
         
         let version = String(cString: av_version_info())
-        print("App Init - FFmpeg version: \(version)")
+        print("SirSnoopsALotApp - FFmpeg version: \(version)")
     }
     
     var body: some Scene {
@@ -24,7 +24,7 @@ struct SirSnoopsALotApp: App {
         
         WindowGroup(for: CameraConfig.self) { $camera in
             if let camera = camera {
-                StandaloneCameraView(camera: camera)
+                FloatingCameraView(camera: camera)
             }
         }
     }
@@ -37,7 +37,7 @@ struct SirSnoopsALotApp: App {
         if resetSettings || userDefaults.data(forKey: "cameras") == nil {
             if let encodedData = try? JSONEncoder().encode(DefaultCameraConfigs.cameras) {
                 userDefaults.set(encodedData, forKey: "cameras")
-                print("Default cameras configuration saved to UserDefaults.")
+                print("SirSnoopsALotApp - Default cameras configuration saved to UserDefaults.")
             }
         }
     }
