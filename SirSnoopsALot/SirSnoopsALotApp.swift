@@ -4,19 +4,6 @@ import SwiftUI
 
 @main
 struct SirSnoopsALotApp: App {
-    let defaultCameras = [
-        CameraConfig(
-            name: "Camera 1",
-            url: "",
-            order: 0
-        ),
-        CameraConfig(
-            name: "Camera 2", 
-            url: "",
-            order: 1
-        )
-    ]
-    
     init() {
         setupDefaultCamerasIfNeeded()
         let version = String(cString: av_version_info())
@@ -38,7 +25,7 @@ struct SirSnoopsALotApp: App {
         
         // Check if cameras array exists
         if userDefaults.data(forKey: "cameras") == nil {
-            if let encodedData = try? JSONEncoder().encode(defaultCameras) {
+            if let encodedData = try? JSONEncoder().encode(DefaultCameraConfigs.cameras) {
                 userDefaults.set(encodedData, forKey: "cameras")
                 print("Default cameras configuration saved to UserDefaults.")
             }
