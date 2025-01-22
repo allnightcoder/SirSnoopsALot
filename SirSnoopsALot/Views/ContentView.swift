@@ -20,7 +20,7 @@ struct ContentView: View {
                 }
             )
         } detail: {
-            CameraStreamView(camera: selectedCamera, currentFrame: streamManager.currentFrame)
+            CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)
         }
         .onAppear {
             print("ContentView - Appeared")
@@ -30,13 +30,7 @@ struct ContentView: View {
             print("ContentView - Camera selection changed - Old: \(oldCamera?.name ?? "none"), New: \(newCamera?.name ?? "none")")
             
             if let camera = newCamera {
-                if streamManager.currentStreamURL != camera.url {
-                    print("ContentView - Starting new stream for camera: \(camera.name)")
-                    streamManager.stopStream()
-                    streamManager.startStream(url: camera.url)
-                } else {
-                    print("ContentView - Stream URL unchanged, keeping existing stream")
-                }
+                switchCameras(newCamera: camera)
             } else {
                 print("ContentView - No camera selected, stopping stream")
                 streamManager.stopStream()
@@ -45,6 +39,16 @@ struct ContentView: View {
         .onDisappear {
             print("ContentView - Disappearing, stopping stream")
             streamManager.stopStream()
+        }
+    }
+    
+    private func switchCameras(newCamera: CameraConfig) {
+        if streamManager.currentStreamURL != newCamera.url {
+            print("ContentView - Starting new stream for camera: \(newCamera.name)")
+            streamManager.stopStream()
+            streamManager.startStream(url: newCamera.url)
+        } else {
+            print("ContentView - Stream URL unchanged, keeping existing stream")
         }
     }
     

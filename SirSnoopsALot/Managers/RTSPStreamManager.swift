@@ -133,7 +133,7 @@ class RTSPStreamManager: ObservableObject {
         let sendResult = avcodec_send_packet(codecContext, packet)
         if sendResult < 0 {
             let errorString = String(cString: av_err2str(sendResult))
-            print("RTSPStreamManager - Error sending packet: \(errorString)")
+//            print("RTSPStreamManager - Error sending packet: \(errorString)")
             av_packet_unref(packet)
             return false
         }

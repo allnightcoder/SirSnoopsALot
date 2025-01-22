@@ -13,7 +13,7 @@ struct FloatingCameraView: View {
     
     var body: some View {
         CameraStreamView(
-            camera: camera,
+            selectedCamera: .constant(camera),
             currentFrame: streamManager.currentFrame
         )
         .navigationTitle(camera.name)

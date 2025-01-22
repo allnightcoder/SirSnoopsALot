@@ -3,7 +3,7 @@ import os
 
 struct CameraStreamView: View {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CameraStreamView", category: "UI")
-    let camera: CameraConfig?
+    @Binding var selectedCamera: CameraConfig?
     let currentFrame: UIImage?
     
     var body: some View {
@@ -21,7 +21,7 @@ struct CameraStreamView: View {
                 }
             }
             
-            if let camera = camera {
+            if let camera = selectedCamera {
                 VStack {
                     Spacer()
                     Text(camera.name)
@@ -34,25 +34,34 @@ struct CameraStreamView: View {
             }
         }
         .onAppear {
-            logger.info("CameraStreamView - appeared - Camera: \(camera?.name ?? "none")")
+            logger.info("CameraStreamView - appeared - Camera: \(selectedCamera?.name ?? "none")")
             if let currentFrame = currentFrame {
                 logger.debug("CameraStreamView - Displaying camera frame")
             } else {
                 logger.info("CameraStreamView - No camera frame available, showing placeholder")
             }
-            if let camera = camera {
+            if let camera = selectedCamera {
                 logger.debug("CameraStreamView - Showing camera overlay for: \(camera.name)")
             }
         }
         .onDisappear {
             logger.info("CameraStreamView - disappeared")
         }
+        .dropDestination(for: CameraConfig.self) { items, location in
+            if let camera = items.first {
+                print("yup \(camera.url)")
+                self.selectedCamera = camera
+                return true
+            } else {
+                return false
+            }
+        }
     }
 }
 
 #Preview {
     CameraStreamView(
-        camera: CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0),
+        selectedCamera: .constant(CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)),
         currentFrame: nil
     )
 } 
