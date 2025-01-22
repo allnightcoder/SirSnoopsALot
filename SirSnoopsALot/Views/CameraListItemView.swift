@@ -39,9 +39,30 @@ struct CameraListItemView: View {
                 .foregroundColor(.gray)
                 .lineLimit(1)
         }
-        .draggable(camera) {
-            Label(camera.name, systemImage: "video")
-        }
+        .onDrag({
+                let userActivity = NSUserActivity(activityType: Activity.floatCamera)
+                do {
+                    print("CameraListItemView - sending camera")
+                    try userActivity.setTypedPayload(camera)
+                    userActivity.targetContentIdentifier = Activity.floatCamera
+                    let itemProvider = NSItemProvider(object: camera.name as NSString)
+                    itemProvider.registerObject(userActivity, visibility: .all)
+                    return itemProvider
+                } catch {
+                    print("Error setting payload: \(error)")
+                    return NSItemProvider(object: "Invalid" as NSString)
+                }
+            },
+            preview: {
+                Label(camera.name, systemImage: "video")
+            })
+        // Seems to conflict with onDrag
+        // Seems to conflict with onDrag
+        // Seems to conflict with onDrag
+        // Seems to conflict with onDrag
+//        .draggable(camera) {
+//            Label(camera.name, systemImage: "video")
+//        }
         .sheet(isPresented: $showingEditCamera) {
             AddCameraView(cameras: $cameras, editingCamera: camera)
         }

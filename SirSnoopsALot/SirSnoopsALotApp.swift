@@ -22,20 +22,10 @@ struct SirSnoopsALotApp: App {
             ContentView()
         }
         
-        WindowGroup(id: "other", for: CameraConfig.self) { $camera in
-            if let camera = camera {
-                FloatingCameraView(camera: camera)
-            }
+        WindowGroup(id: "floating") {
+            FloatingCameraView()
         }
-        
-        WindowGroup("detail", for: String.self) { $draggedText in
-            if let draggedText = draggedText {
-                DetailView(draggedString: draggedText)
-            } else {
-                NopeView()
-            }
-        }
-        .handlesExternalEvents(matching: ["detail"])
+        .handlesExternalEvents(matching: [Activity.floatCamera])
     }
     
     private func setupDefaultCamerasIfNeeded() {
@@ -56,33 +46,5 @@ struct SirSnoopsALotApp: App {
                 print("SirSnoopsALotApp - Default cameras configuration saved to UserDefaults.")
             }
         }
-    }
-}
-
-struct DetailView: View {
-    let draggedString: String
-    
-    init(draggedString: String) {
-        self.draggedString = draggedString
-        print("DetailView starting with \(draggedString)")
-    }
-    
-    var body: some View {
-        Text("Detail window with data:\n\(draggedString)")
-            .font(.title2)
-            .padding()
-    }
-}
-
-struct NopeView: View {
-    
-    init() {
-        print("NopeView starting")
-    }
-    
-    var body: some View {
-        Text("NOPE")
-            .font(.title2)
-            .padding()
     }
 }
