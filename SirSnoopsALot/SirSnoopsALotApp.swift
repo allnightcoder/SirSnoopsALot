@@ -25,6 +25,7 @@ struct SirSnoopsALotApp: App {
         WindowGroup(id: "floating") {
             FloatingCameraView()
         }
+        .windowStyle(.plain)
         .handlesExternalEvents(matching: [Activity.floatCamera])
     }
     
