@@ -16,6 +16,7 @@ struct FloatingCameraView: View {
             currentFrame: streamManager.currentFrame
         )
         .glassBackgroundEffect(in: .rect)
+        .aspectRatio(contentMode: .fit)
         .navigationTitle(camera?.name ?? "")
         .onDisappear {
             print("FloatingCameraView - View disappearing for camera: \(camera?.name ?? "Unknown")")

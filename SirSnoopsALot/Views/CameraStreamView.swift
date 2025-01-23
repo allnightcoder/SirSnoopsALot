@@ -33,6 +33,8 @@ struct CameraStreamView: View {
                 }
             }
         }
+        .aspectRatio(contentMode: .fit)
+        .border(Color.red, width: 1)
         .onAppear {
             logger.info("CameraStreamView - appeared - Camera: \(selectedCamera?.name ?? "none")")
             if let currentFrame = currentFrame {
