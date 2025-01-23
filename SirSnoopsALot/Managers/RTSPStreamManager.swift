@@ -28,8 +28,6 @@ class RTSPStreamManager: ObservableObject {
         currentStreamURL = url
         guard !url.contains("Not set") else { return }
         
-        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "0" else { return }
-        
         // Initialize FFmpeg components
         var formatContext: UnsafeMutablePointer<AVFormatContext>? = nil
         guard avformat_open_input(&formatContext, url, nil, nil) >= 0 else {
@@ -253,8 +251,6 @@ class RTSPStreamManager: ObservableObject {
     
     func stopStream() {
         guard currentStreamURL != nil else { return }
-        
-        guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "0" else { return }
         
         print("RTSPStreamManager - Stopping stream: \(currentStreamURL ?? "None")")
         isRunning = false
