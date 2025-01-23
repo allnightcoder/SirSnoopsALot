@@ -6,7 +6,7 @@ struct CameraListView: View {
     @State private var cameraManager = CameraManager.shared
     
     var body: some View {
-        List(cameraManager.cameras, id: \.id) { camera in
+        List(cameraManager.cameras, id: \.id, selection: $selectedCamera) { camera in
             NavigationLink(value: camera) {
                 CameraListItemView(
                     camera: camera

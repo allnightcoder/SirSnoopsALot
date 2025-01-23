@@ -15,6 +15,9 @@ struct ContentView: View {
             CameraListView(
                 selectedCamera: $selectedCamera
             )
+            .navigationDestination(for: CameraConfig.self) { camera in
+                CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)
+            }
         } detail: {
             CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)
         }
