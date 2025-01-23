@@ -3,6 +3,7 @@ import CoreTransferable
 import UniformTypeIdentifiers
 
 struct CameraConfig: Codable, Transferable, Hashable {
+    var id: UUID
     var name: String
     var url: String
     var description: String

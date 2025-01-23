@@ -55,7 +55,7 @@ struct CameraListView: View {
     NavigationStack {
         CameraListView(
             cameras: [
-                CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)
+                CameraConfig(id: UUID(), name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)
             ],
             selectedCamera: .constant(nil),
             onOpenInNewWindow: { _ in }

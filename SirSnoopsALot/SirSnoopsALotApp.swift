@@ -46,6 +46,8 @@ struct SirSnoopsALotApp: App {
                 userDefaults.set(encodedData, forKey: "cameras")
                 print("SirSnoopsALotApp - Default cameras configuration saved to UserDefaults.")
             }
+            
+            userDefaults.set(false, forKey: "showCameraFeedBorder")
         }
     }
 }

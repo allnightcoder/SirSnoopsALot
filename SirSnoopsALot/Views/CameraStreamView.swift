@@ -34,7 +34,7 @@ struct CameraStreamView: View {
             }
         }
         .aspectRatio(contentMode: .fit)
-        .border(Color.red, width: 1)
+        .border(Color.red, width: UserDefaults.standard.bool(forKey: "showCameraFeedBorder") ? 1 : 0)
         .onAppear {
             logger.info("CameraStreamView - appeared - Camera: \(selectedCamera?.name ?? "none")")
             if let currentFrame = currentFrame {
@@ -63,7 +63,7 @@ struct CameraStreamView: View {
 
 #Preview {
     CameraStreamView(
-        selectedCamera: .constant(CameraConfig(name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)),
+        selectedCamera: .constant(CameraConfig(id: UUID(), name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)),
         currentFrame: nil
     )
 } 

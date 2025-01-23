@@ -7,6 +7,7 @@ struct CameraListItemView: View {
     let onOpenInNewWindow: (CameraConfig) -> Void
     @Binding var cameras: [CameraConfig]
     @State private var showingEditCamera = false
+    @State private var showingDeleteConfirmation = false
     
     var body: some View {
         VStack(alignment: .leading) {
@@ -28,8 +29,7 @@ struct CameraListItemView: View {
                     }
                     
                     Button(role: .destructive, action: {
-                        print("CameraListItemView - Delete button tapped for camera: \(camera.name)")
-                        // Delete action
+                        showingDeleteConfirmation = true
                     }) {
                         Label("Delete", systemImage: "trash")
                     }
@@ -66,8 +66,42 @@ struct CameraListItemView: View {
         .sheet(isPresented: $showingEditCamera) {
             AddCameraView(cameras: $cameras, editingCamera: camera)
         }
+        .confirmationDialog(
+            "Delete Camera",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete \(camera.name)", role: .destructive) {
+                deleteCamera()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Are you sure you want to delete this camera? This action cannot be undone.")
+        }
         .onAppear {
             print("CameraListItemView - Appeared for camera: \(camera.name)")
+        }
+    }
+    
+    private func deleteCamera() {
+        if let index = cameras.firstIndex(where: { iteratedCamera in
+            iteratedCamera.id == camera.id
+        }) {
+            print("CameraListItemView - found camera at index \(index) - proceeding to delete \(camera.name)")
+            cameras.remove(at: index)
+            print("CameraListItemView - reordering cameras before saving")
+            // Re-order remaining cameras
+            for i in 0..<cameras.count {
+                cameras[i].order = i
+            }
+            // Save to UserDefaults
+            do {
+                let encodedData = try JSONEncoder().encode(cameras)
+                UserDefaults.standard.set(encodedData, forKey: "cameras")
+                print("CameraListItemView - Cameras saved after deletion: \(cameras)")
+            } catch {
+                print("CameraListItemView - Error encoding cameras: \(error)")
+            }
         }
     }
 }

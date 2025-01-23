@@ -39,6 +39,7 @@ struct AddCameraView: View {
         } else {
             // Add new camera
             let newCamera = CameraConfig(
+                id: UUID(),
                 name: name,
                 url: url,
                 description: description,
