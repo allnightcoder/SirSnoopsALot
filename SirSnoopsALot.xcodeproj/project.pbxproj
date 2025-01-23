@@ -283,7 +283,8 @@
 				"EXCLUDED_ARCHS[sdk=xros*]" = "";
 				"EXCLUDED_ARCHS[sdk=xrsimulator*]" = "";
 				"FRAMEWORK_SEARCH_PATHS[arch=*]" = "$(SRCROOT)/FFmpegLibs/visionos-xcframework";
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SirSnoopsALot/Info.plist;
 				"HEADER_SEARCH_PATHS[sdk=xros*]" = (
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavformat.xcframework/xros-arm64/Headers",
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavcodec.xcframework/xros-arm64/Headers",
