@@ -9,6 +9,7 @@ struct ContentView: View {
     @StateObject private var streamManager = RTSPStreamManager()
     @Environment(\.openWindow) private var openWindow
     @State private var cameraManager = CameraManager.shared
+    @State private var showingSettings = false
     
     var body: some View {
         NavigationSplitView {
@@ -37,6 +38,17 @@ struct ContentView: View {
         .onDisappear {
             print("ContentView - Disappearing, stopping stream")
             streamManager.stopStream()
+        }
+        .ornament(visibility: .visible, attachmentAnchor: .scene(.topTrailing)) {
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gear")
+                    .font(.title2)
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
         }
     }
     
