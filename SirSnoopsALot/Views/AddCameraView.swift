@@ -2,18 +2,16 @@ import SwiftUI
 
 struct AddCameraView: View {
     @Environment(\.dismiss) private var dismiss
-    @Binding var cameras: [CameraConfig]
     let editingCamera: CameraConfig?
+    @State private var cameraManager = CameraManager.shared
     
     @State private var name: String = ""
     @State private var url: String = ""
     @State private var description: String = ""
     
-    init(cameras: Binding<[CameraConfig]>, editingCamera: CameraConfig? = nil) {
-        self._cameras = cameras
+    init(editingCamera: CameraConfig? = nil) {
         self.editingCamera = editingCamera
         
-        // Initialize state with editing camera values if present
         if let camera = editingCamera {
             _name = State(initialValue: camera.name)
             _url = State(initialValue: camera.url)
@@ -21,43 +19,12 @@ struct AddCameraView: View {
         }
     }
     
-    private func getNextOrder() -> Int {
-        if let maxOrder = cameras.map({ $0.order }).max() {
-            return maxOrder + 1
-        }
-        return 0
-    }
-    
     private func saveCamera() {
         if let editingCamera = editingCamera {
-            // Update existing camera
-            if let index = cameras.firstIndex(where: { $0.order == editingCamera.order }) {
-                cameras[index].name = name
-                cameras[index].url = url
-                cameras[index].description = description
-            }
+            cameraManager.updateCamera(editingCamera, name: name, url: url, description: description)
         } else {
-            // Add new camera
-            let newCamera = CameraConfig(
-                id: UUID(),
-                name: name,
-                url: url,
-                description: description,
-                order: getNextOrder()
-            )
-            cameras.append(newCamera)
-            cameras.sort(by: { $0.order < $1.order })
+            cameraManager.addCamera(name: name, url: url, description: description)
         }
-        
-        // Save to UserDefaults
-        do {
-            let encodedData = try JSONEncoder().encode(cameras)
-            UserDefaults.standard.set(encodedData, forKey: "cameras")
-            print("\(editingCamera != nil ? "EditCamera" : "AddCamera")View - Camera saved: \(name)")
-        } catch {
-            print("\(editingCamera != nil ? "EditCamera" : "AddCamera")View - Error encoding cameras: \(error)")
-        }
-        
         dismiss()
     }
     
