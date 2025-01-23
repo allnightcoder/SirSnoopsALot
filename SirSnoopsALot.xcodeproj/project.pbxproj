@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		139766EE2D42C98900510F20 /* RealityKitContent in Frameworks */ = {isa = PBXBuildFile; productRef = 139766ED2D42C98900510F20 /* RealityKitContent */; };
 		13E708B42D3F1C8D004283E8 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B32D3F1C8D004283E8 /* libbz2.tbd */; };
 		13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B52D3F1D13004283E8 /* libz.tbd */; };
 		13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B72D3F1D1D004283E8 /* libiconv.tbd */; };
@@ -23,15 +24,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		13291E7F2D42BA0100EEE279 /* libavcodec.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavcodec.xcframework; path = "FFmpegLibs/visionos-xcframework/libavcodec.xcframework"; sourceTree = "<group>"; };
-		13291E802D42BA0100EEE279 /* libavdevice.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavdevice.xcframework; path = "FFmpegLibs/visionos-xcframework/libavdevice.xcframework"; sourceTree = "<group>"; };
-		13291E812D42BA0100EEE279 /* libavfilter.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavfilter.xcframework; path = "FFmpegLibs/visionos-xcframework/libavfilter.xcframework"; sourceTree = "<group>"; };
-		13291E822D42BA0100EEE279 /* libavformat.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavformat.xcframework; path = "FFmpegLibs/visionos-xcframework/libavformat.xcframework"; sourceTree = "<group>"; };
-		13291E832D42BA0100EEE279 /* libavutil.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavutil.xcframework; path = "FFmpegLibs/visionos-xcframework/libavutil.xcframework"; sourceTree = "<group>"; };
-		13291E842D42BA0100EEE279 /* libswresample.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswresample.xcframework; path = "FFmpegLibs/visionos-xcframework/libswresample.xcframework"; sourceTree = "<group>"; };
-		13291E852D42BA0100EEE279 /* libswscale.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswscale.xcframework; path = "FFmpegLibs/visionos-xcframework/libswscale.xcframework"; sourceTree = "<group>"; };
+		13291E7F2D42BA0100EEE279 /* libavcodec.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavcodec.xcframework; path = "visionos-xcframework/libavcodec.xcframework"; sourceTree = "<group>"; };
+		13291E812D42BA0100EEE279 /* libavfilter.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavfilter.xcframework; path = "visionos-xcframework/libavfilter.xcframework"; sourceTree = "<group>"; };
+		13291E822D42BA0100EEE279 /* libavformat.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavformat.xcframework; path = "visionos-xcframework/libavformat.xcframework"; sourceTree = "<group>"; };
+		13291E832D42BA0100EEE279 /* libavutil.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libavutil.xcframework; path = "visionos-xcframework/libavutil.xcframework"; sourceTree = "<group>"; };
+		13291E842D42BA0100EEE279 /* libswresample.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswresample.xcframework; path = "visionos-xcframework/libswresample.xcframework"; sourceTree = "<group>"; };
+		13291E852D42BA0100EEE279 /* libswscale.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswscale.xcframework; path = "visionos-xcframework/libswscale.xcframework"; sourceTree = "<group>"; };
 		13E706C92D3EE125004283E8 /* SirSnoopsALot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SirSnoopsALot.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		13E706CD2D3EE125004283E8 /* RealityKitContent */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = RealityKitContent; sourceTree = "<group>"; };
 		13E706DE2D3EE126004283E8 /* SirSnoopsALotTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SirSnoopsALotTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		13E708B32D3F1C8D004283E8 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
 		13E708B52D3F1D13004283E8 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
@@ -71,6 +70,7 @@
 			files = (
 				13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */,
 				13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */,
+				139766EE2D42C98900510F20 /* RealityKitContent in Frameworks */,
 				13E708B42D3F1C8D004283E8 /* libbz2.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -89,7 +89,6 @@
 			isa = PBXGroup;
 			children = (
 				13291E7F2D42BA0100EEE279 /* libavcodec.xcframework */,
-				13291E802D42BA0100EEE279 /* libavdevice.xcframework */,
 				13291E812D42BA0100EEE279 /* libavfilter.xcframework */,
 				13291E822D42BA0100EEE279 /* libavformat.xcframework */,
 				13291E832D42BA0100EEE279 /* libavutil.xcframework */,
@@ -123,7 +122,6 @@
 		13E706CC2D3EE125004283E8 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				13E706CD2D3EE125004283E8 /* RealityKitContent */,
 			);
 			path = Packages;
 			sourceTree = "<group>";
@@ -158,6 +156,7 @@
 			);
 			name = SirSnoopsALot;
 			packageProductDependencies = (
+				139766ED2D42C98900510F20 /* RealityKitContent */,
 			);
 			productName = SirSnoopsALot;
 			productReference = 13E706C92D3EE125004283E8 /* SirSnoopsALot.app */;
@@ -214,6 +213,9 @@
 			);
 			mainGroup = 13E706C02D3EE125004283E8;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				139766EC2D42C98900510F20 /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 13E706CA2D3EE125004283E8 /* Products */;
 			projectDirPath = "";
@@ -280,12 +282,36 @@
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=xros*]" = "";
 				"EXCLUDED_ARCHS[sdk=xrsimulator*]" = "";
-				"FRAMEWORK_SEARCH_PATHS[sdk=*]" = "$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework";
+				"FRAMEWORK_SEARCH_PATHS[sdk=*]" = "$(PROJECT_DIR)/visionos-xcframework";
 				GENERATE_INFOPLIST_FILE = YES;
-				"HEADER_SEARCH_PATHS[arch=*]" = "$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework/*/Headers";
+				"HEADER_SEARCH_PATHS[sdk=xros*]" = (
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavformat.xcframework/xros-arm64/Headers",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavcodec.xcframework/xros-arm64/Headers",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavfilter.xcframework/xros-arm64/Headers",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavutil.xcframework/xros-arm64/Headers",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswresample.xcframework/xros-arm64/Headers",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswscale.xcframework/xros-arm64/Headers",
+				);
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework/**/**",
+					"$(PROJECT_DIR)/visionos-xcframework/libavcodec.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavformat.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavfilter.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavutil.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libswresample.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libswscale.xcframework/xros-arm64",
+				);
+				"LIBRARY_SEARCH_PATHS[sdk=xros*]" = (
+					"$(inherited)",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavcodec.xcframework/xros-arm64",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavformat.xcframework/xros-arm64",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavfilter.xcframework/xros-arm64",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavutil.xcframework/xros-arm64",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswresample.xcframework/xros-arm64",
+					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswscale.xcframework/xros-arm64",
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
@@ -321,12 +347,27 @@
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=xros*]" = "";
 				"EXCLUDED_ARCHS[sdk=xrsimulator*]" = "";
-				"FRAMEWORK_SEARCH_PATHS[sdk=*]" = "$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework";
+				"FRAMEWORK_SEARCH_PATHS[sdk=*]" = "$(PROJECT_DIR)/visionos-xcframework";
 				GENERATE_INFOPLIST_FILE = YES;
-				"HEADER_SEARCH_PATHS[arch=*]" = "$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework/*/Headers";
+				"HEADER_SEARCH_PATHS[arch=*]" = (
+					"$(PROJECT_DIR)/visionos-xcframework/libavformat.xcframework/xros-arm64/Headers",
+					"$(PROJECT_DIR)/visionos-xcframework/libavcodec.xcframework/xros-arm64/Headers",
+					"$(PROJECT_DIR)/visionos-xcframework/libavfilter.xcframework/xros-arm64/Headers",
+					"$(PROJECT_DIR)/visionos-xcframework/libavutil.xcframework/xros-arm64/Headers",
+					"$(PROJECT_DIR)/visionos-xcframework/libswresample.xcframework/xros-arm64/Headers",
+					"$(PROJECT_DIR)/visionos-xcframework/libswscale.xcframework/xros-arm64/Headers",
+				);
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(PROJECT_DIR)/FFmpegLibs/visionos-xcframework/**/**",
+					"$(PROJECT_DIR)/visionos-xcframework/libavcodec.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavformat.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavfilter.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libavutil.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libswresample.xcframework/xros-arm64",
+					"$(PROJECT_DIR)/visionos-xcframework/libswscale.xcframework/xros-arm64",
 				);
 				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
@@ -540,6 +581,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		139766EC2D42C98900510F20 /* XCLocalSwiftPackageReference "Packages/RealityKitContent" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/RealityKitContent;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		139766ED2D42C98900510F20 /* RealityKitContent */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RealityKitContent;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 13E706C12D3EE125004283E8 /* Project object */;
 }
