@@ -2,6 +2,11 @@
 
 import SwiftUI
 
+
+#Preview {
+    ContentView()
+}
+
 @main
 struct SirSnoopsALotApp: App {
     private let enableFFmpegLogging = false
@@ -51,3 +56,4 @@ struct SirSnoopsALotApp: App {
         }
     }
 }
+
