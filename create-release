@@ -1,0 +1,127 @@
+#!/bin/bash
+
+# Function to get the latest version tag
+get_latest_version() {
+    git fetch --tags > /dev/null 2>&1
+    latest_tag=$(git tag -l "v[0-9]*.[0-9]*.[0-9]*" | sort -V | tail -n1)
+    if [ -z "$latest_tag" ]; then
+        echo "0.0.0"
+    else
+        echo "${latest_tag#v}"
+    fi
+}
+
+# Function to suggest next version
+suggest_version() {
+    current=$1
+    IFS='.' read -r major minor patch <<< "$current"
+    echo "$major.$((minor + 1)).0"
+}
+
+# Function to validate version increment
+validate_increment() {
+    current=$1
+    proposed=$2
+    
+    IFS='.' read -r curr_major curr_minor curr_patch <<< "$current"
+    IFS='.' read -r prop_major prop_minor prop_patch <<< "$proposed"
+    
+    # Check major version increment
+    major_diff=$((prop_major - curr_major))
+    if [ $major_diff -gt 1 ]; then
+        echo "Error: Cannot increment major version by more than 1 (from $current to $proposed)"
+        exit 1
+    elif [ $major_diff -eq 1 ]; then
+        # If major version increases, minor and patch should be 0
+        if [ $prop_minor != 0 ] || [ $prop_patch != 0 ]; then
+            echo "Error: When incrementing major version, minor and patch should be 0"
+            exit 1
+        fi
+        return 0
+    fi
+    
+    # Check minor version increment
+    if [ $prop_major -eq $curr_major ]; then
+        minor_diff=$((prop_minor - curr_minor))
+        if [ $minor_diff -gt 1 ]; then
+            echo "Error: Cannot increment minor version by more than 1 (from $current to $proposed)"
+            exit 1
+        fi
+    fi
+}
+
+# Get current version
+CURRENT_VERSION=$(get_latest_version)
+
+if [ $# -eq 0 ]; then
+    SUGGESTED_VERSION=$(suggest_version "$CURRENT_VERSION")
+    echo "Current version: $CURRENT_VERSION"
+    echo "Suggested next version: $SUGGESTED_VERSION"
+    echo "Usage: $0 <version-number>"
+    echo "Example: $0 $SUGGESTED_VERSION"
+    exit 1
+fi
+
+# Validate version number format (x.y.z)
+if ! [[ $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: Version number must be in format x.y.z (e.g., 0.2.0)"
+    exit 1
+fi
+
+# Validate version increment
+validate_increment "$CURRENT_VERSION" "$1"
+
+VERSION=$1
+BRANCH="release/$VERSION"
+TAG="v$VERSION"
+
+# Function to check last command status
+check_status() {
+    if [ $? -ne 0 ]; then
+        echo "Error: $1"
+        exit 1
+    fi
+}
+
+echo "Creating release $VERSION..."
+echo "This will:"
+echo "1. Create and push branch: $BRANCH"
+echo "2. Create and push tag: $TAG"
+echo "3. Merge to master"
+
+read -p "Continue? (y/n) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    exit 1
+fi
+
+git checkout -b $BRANCH
+check_status "Failed to create branch"
+
+git push -u origin $BRANCH
+check_status "Failed to push branch"
+
+git tag -a $TAG -m "Release $VERSION"
+check_status "Failed to create tag"
+
+git push origin $TAG
+check_status "Failed to push tag"
+
+git checkout master
+check_status "Failed to checkout master"
+
+git merge $BRANCH
+check_status "Failed to merge release branch"
+
+git push
+check_status "Failed to push to master"
+
+# Optional: Clean up release branch
+read -p "Delete release branch? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    git branch -d $BRANCH
+    git push origin --delete $BRANCH
+fi
+
+echo "Release $VERSION completed successfully!"
