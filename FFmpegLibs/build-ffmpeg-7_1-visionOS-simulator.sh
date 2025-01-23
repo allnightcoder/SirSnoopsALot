@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-##################################################
+#######################################
+# Enforce using the correct Xcode
+#######################################
+# Only do this if needed:
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+#######################################
 # Configuration
-##################################################
+#######################################
 SOURCE="$(pwd)"
 BUILD_DIR="$SOURCE/build-visionos-simulator"
 PREFIX_DIR="$BUILD_DIR/ffmpeg-install"
@@ -11,9 +17,10 @@ PREFIX_DIR="$BUILD_DIR/ffmpeg-install"
 ARCH="arm64"
 MIN_VERSION="2.1"
 
-# Use xros-simulator SDK
-SDK_PATH="$(xcrun --sdk xros-simulator --show-sdk-path)"
-CC="$(xcrun --sdk xros-simulator --find clang)"
+# For simulator: "xrsimulator2.1" per 'xcodebuild -showsdks'
+SDK_NAME="xrsimulator2.1"
+SDK_PATH="$(xcrun --sdk $SDK_NAME --show-sdk-path)"
+CC="$(xcrun --sdk $SDK_NAME --find clang)"
 
 CFLAGS="-target arm64-apple-xros-simulator$MIN_VERSION \
         -arch $ARCH \
@@ -29,16 +36,16 @@ LDFLAGS="-target arm64-apple-xros-simulator$MIN_VERSION \
          -framework Foundation \
          -framework CoreFoundation"
 
-##################################################
+#######################################
 # Clean and Create build directories
-##################################################
+#######################################
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$PREFIX_DIR"
 
-##################################################
+#######################################
 # Configure FFmpeg
-##################################################
+#######################################
 cd "$BUILD_DIR"
 
 "$SOURCE/configure" \
@@ -74,9 +81,9 @@ cd "$BUILD_DIR"
   --enable-avfilter \
   --enable-avutil
 
-##################################################
+#######################################
 # Build & Install
-##################################################
+#######################################
 make -j"$(sysctl -n hw.ncpu)"
 make install
 

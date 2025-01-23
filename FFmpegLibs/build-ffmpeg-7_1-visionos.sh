@@ -1,33 +1,26 @@
 #!/usr/bin/env bash
-
-# Exit if any command fails
 set -e
 
-##################################################
+#######################################
+# Enforce using the correct Xcode
+#######################################
+# Only do this if needed:
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+#######################################
 # Configuration
-##################################################
-
-# Where FFmpeg source is located (this script assumes you run it from the top-level FFmpeg folder).
-SOURCE="$(pwd)"
-
-# Where to place build artifacts
+#######################################
+SOURCE="$(pwd)"  # Current FFmpeg source dir (assuming script is run from root of FFmpeg)
 BUILD_DIR="$SOURCE/build-visionos"
-
-# The prefix (installation) directory
 PREFIX_DIR="$BUILD_DIR/ffmpeg-install"
 
-# Target architecture (visionOS is arm64 only at the moment)
 ARCH="arm64"
-
-# Minimum deployment version for visionOS (adjust if needed)
 MIN_VERSION="2.1"
 
-# Platform path for visionOS
-PLATFORM_PATH="$(xcrun --sdk xros --show-sdk-platform-path)"
-SDK_PATH="$(xcrun --sdk xros --show-sdk-path)"
-CC="$(xcrun --sdk xros --find clang)"
+SDK_NAME="xros2.1"  # As shown in 'xcodebuild -showsdks' for visionOS device
+SDK_PATH="$(xcrun --sdk $SDK_NAME --show-sdk-path)"
+CC="$(xcrun --sdk $SDK_NAME --find clang)"
 
-# Additional flags passed to the compiler
 CFLAGS="-target arm64-apple-xros$MIN_VERSION \
         -arch $ARCH \
         -isysroot $SDK_PATH \
@@ -42,23 +35,18 @@ LDFLAGS="-target arm64-apple-xros$MIN_VERSION \
          -framework Foundation \
          -framework CoreFoundation"
 
-##################################################
-# Clean / Create build directories
-##################################################
+#######################################
+# Clean and Create build directories
+#######################################
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 mkdir -p "$PREFIX_DIR"
 
-##################################################
+#######################################
 # Configure FFmpeg
-##################################################
+#######################################
 cd "$BUILD_DIR"
 
-# Example configuration. Adjust to your needs:
-# --enable-cross-compile is crucial when building for a different target OS/arch.
-# --disable-everything / --enable-whatever to control which components are built.
-# If you want shared libs, use --enable-shared (you'll have to handle dynamic frameworks).
-# If you only want static libs, stick to --enable-static --disable-shared.
 "$SOURCE/configure" \
   --prefix="$PREFIX_DIR" \
   --arch="$ARCH" \
@@ -92,21 +80,10 @@ cd "$BUILD_DIR"
   --enable-avfilter \
   --enable-avutil
 
-# Explanation of some flags:
-# - disable-programs: skip building FFmpeg command-line tools (ffmpeg, ffprobe, etc.), 
-#   because you typically just need libraries in an app.
-# - disable-network: if you plan to do networking (RTSP, etc.), consider removing --disable-network or enabling it. 
-#   You might also need --enable-protocol=rtp --enable-protocol=tcp --enable-protocol=udp, etc.
-# - enable-avformat/avcodec/swresample...: key libs for decoding/encoding. 
-#   Tweak these if you want fewer or more components.
-
-##################################################
+#######################################
 # Build & Install
-##################################################
-make -j$(sysctl -n hw.ncpu)
+#######################################
+make -j"$(sysctl -n hw.ncpu)"
 make install
 
-# The result should be in $PREFIX_DIR (include headers + lib*.a files).
-
-echo "FFmpeg has been built and installed to: $PREFIX_DIR"
-
+echo "Device build of FFmpeg installed to: $PREFIX_DIR"
