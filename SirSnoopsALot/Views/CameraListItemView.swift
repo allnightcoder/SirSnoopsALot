@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 struct CameraListItemView: View {
     let camera: CameraConfig
-    let onOpenInNewWindow: (CameraConfig) -> Void
+    @Environment(\.openWindow) private var openWindow
     @State private var showingEditCamera = false
     @State private var showingDeleteConfirmation = false
     @State private var cameraManager = CameraManager.shared
@@ -16,7 +16,7 @@ struct CameraListItemView: View {
                 .contextMenu {
                     Button(action: {
                         print("CameraListItemView - Attempting to open camera in new window: \(camera.name)")
-                        onOpenInNewWindow(camera)
+                        openWindow(id: "floating", value: camera)
                     }) {
                         Label("Open in New Window", systemImage: "rectangle.on.rectangle")
                     }

@@ -37,7 +37,7 @@ struct CameraStreamView: View {
         .border(Color.red, width: UserDefaults.standard.bool(forKey: "showCameraFeedBorder") ? 1 : 0)
         .onAppear {
             logger.info("CameraStreamView - appeared - Camera: \(selectedCamera?.name ?? "none")")
-            if let currentFrame = currentFrame {
+            if currentFrame != nil {
                 logger.debug("CameraStreamView - Displaying camera frame")
             } else {
                 logger.info("CameraStreamView - No camera frame available, showing placeholder")

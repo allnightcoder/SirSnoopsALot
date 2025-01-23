@@ -22,8 +22,8 @@ struct SirSnoopsALotApp: App {
             ContentView()
         }
         
-        WindowGroup(id: "floating") {
-            FloatingCameraView()
+        WindowGroup(id: "floating", for: CameraConfig.self) { $camera in
+            FloatingCameraView(camera: $camera.wrappedValue)
         }
         .windowStyle(.plain)
         .handlesExternalEvents(matching: [Activity.floatCamera])

@@ -31,7 +31,7 @@ class RTSPStreamManager: ObservableObject {
         // Initialize FFmpeg components
         var formatContext: UnsafeMutablePointer<AVFormatContext>? = nil
         guard avformat_open_input(&formatContext, url, nil, nil) >= 0 else {
-            print("RTSPStreamManager - Failed to open input")
+            print("RTSPStreamManager - Failed to open input: \(url)")
             return
         }
         self.formatContext = formatContext
@@ -116,15 +116,14 @@ class RTSPStreamManager: ObservableObject {
         if readResult < 0 {
             // Handle specific error cases
             switch readResult {
-            case AVERROR_EOF:  // Now both sides of comparison are Int32
+            case AVERROR_EOF:
                 print("RTSPStreamManager - End of stream reached")
                 stopStream()
             case AVERROR(EAGAIN):
                 // Resource temporarily unavailable, can retry
                 return false
             default:
-                let errorString = String(cString: av_err2str(readResult))
-                print("RTSPStreamManager - Error reading frame: \(errorString)")
+                print("RTSPStreamManager - Error reading frame: \(av_err2str(readResult))")
                 return false
             }
             return false
@@ -132,8 +131,6 @@ class RTSPStreamManager: ObservableObject {
         
         let sendResult = avcodec_send_packet(codecContext, packet)
         if sendResult < 0 {
-            let errorString = String(cString: av_err2str(sendResult))
-//            print("RTSPStreamManager - Error sending packet: \(errorString)")
             av_packet_unref(packet)
             return false
         }
@@ -142,8 +139,7 @@ class RTSPStreamManager: ObservableObject {
         if receiveResult >= 0 {
             convertFrameToImage(frame)
         } else if receiveResult != AVERROR(EAGAIN) {
-            let errorString = String(cString: av_err2str(receiveResult))
-            print("RTSPStreamManager - Error receiving frame: \(errorString)")
+            print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
         }
         
         av_packet_unref(packet)

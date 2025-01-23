@@ -5,9 +5,9 @@ struct FloatingCameraView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @StateObject private var streamManager = RTSPStreamManager()
     
-    init() {
-        _camera = State(initialValue: nil)
-        print("FloatingCameraView - Init started")
+    init(camera: CameraConfig?) {
+        _camera = State(initialValue: camera)
+        print("FloatingCameraView - Init started \(camera?.url ?? "Unknown")")
     }
     
     var body: some View {
@@ -22,6 +22,11 @@ struct FloatingCameraView: View {
             print("FloatingCameraView - View disappearing for camera: \(camera?.name ?? "Unknown")")
             streamManager.stopStream()
             print("FloatingCameraView - Stream stop completed")
+        }
+        .onAppear() {
+            if let validCamera = camera {
+                streamManager.startStream(url: validCamera.url)
+            }
         }
         .onContinueUserActivity(Activity.floatCamera) { userActivity in
             if let draggedCamera = try? userActivity.typedPayload(CameraConfig.self) {

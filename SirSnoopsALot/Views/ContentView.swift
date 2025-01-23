@@ -13,10 +13,7 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             CameraListView(
-                selectedCamera: $selectedCamera,
-                onOpenInNewWindow: { camera in
-                    openWindow(value: camera)
-                }
+                selectedCamera: $selectedCamera
             )
         } detail: {
             CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)

@@ -2,7 +2,6 @@ import SwiftUI
 
 struct CameraListView: View {
     @Binding var selectedCamera: CameraConfig?
-    let onOpenInNewWindow: (CameraConfig) -> Void
     @State private var showingAddCamera = false
     @State private var cameraManager = CameraManager.shared
     
@@ -10,8 +9,7 @@ struct CameraListView: View {
         List(cameraManager.cameras, id: \.id) { camera in
             NavigationLink(value: camera) {
                 CameraListItemView(
-                    camera: camera,
-                    onOpenInNewWindow: onOpenInNewWindow
+                    camera: camera
                 )
             }
         }
@@ -35,8 +33,7 @@ struct CameraListView: View {
 #Preview {
     NavigationStack {
         CameraListView(
-            selectedCamera: .constant(nil),
-            onOpenInNewWindow: { _ in }
+            selectedCamera: .constant(nil)
         )
     }
 } 
