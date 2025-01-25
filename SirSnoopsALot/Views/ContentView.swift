@@ -5,9 +5,11 @@ import RealityKit
 import RealityKitContent
 
 struct ContentView: View {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismissWindow) private var dismissWindow
     @State private var selectedCamera: CameraConfig?
     @StateObject private var streamManager = RTSPStreamManager()
-    @Environment(\.openWindow) private var openWindow
     @State private var cameraManager = CameraManager.shared
     @State private var showingSettings = false
     
@@ -24,6 +26,14 @@ struct ContentView: View {
         }
         .onAppear {
             selectedCamera = cameraManager.cameras.first
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            print("ContentView - Scene phase changed from \(oldPhase) to \(newPhase)")
+            
+            if newPhase == .background {
+                dismissWindow(id: "floating")
+                print("ContentView - Main window entering background, closing floating windows")
+            }
         }
         .onChange(of: selectedCamera) { oldCamera, newCamera in
             print("ContentView - Camera selection changed - Old: \(oldCamera?.name ?? "none"), New: \(newCamera?.name ?? "none")")
