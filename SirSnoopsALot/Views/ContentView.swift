@@ -31,7 +31,7 @@ struct ContentView: View {
             print("ContentView - Scene phase changed from \(oldPhase) to \(newPhase)")
             
             if newPhase == .background {
-                dismissWindow(id: "floating")
+                // dismissWindow(id: "floating")
                 print("ContentView - Main window entering background, closing floating windows")
             }
         }
