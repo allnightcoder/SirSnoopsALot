@@ -25,7 +25,10 @@ class RTSPStreamManager: ObservableObject {
     private var isRunning = false
     
     func startStream(url: String) {
-        currentStreamURL = url
+        // Move published property update to main thread
+        DispatchQueue.main.async {
+            self.currentStreamURL = url
+        }
         guard !url.contains("Not set") else { return }
         
         // Initialize FFmpeg components
@@ -254,7 +257,11 @@ class RTSPStreamManager: ObservableObject {
         
         print("RTSPStreamManager - Stopping stream: \(currentStreamURL ?? "None")")
         isRunning = false
-        currentStreamURL = nil
+        
+        // Move published property updates to main thread
+        DispatchQueue.main.async {
+            self.currentStreamURL = nil
+        }
         
         // Wait briefly to ensure the decoding loop has stopped
         Thread.sleep(forTimeInterval: 0.1)
