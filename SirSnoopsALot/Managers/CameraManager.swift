@@ -1,11 +1,10 @@
 import Foundation
 import SwiftUI
 
-@Observable
-final class CameraManager {
+final class CameraManager: ObservableObject {
     static let shared = CameraManager()
     
-    var cameras: [CameraConfig] = []
+    @Published var cameras: [CameraConfig] = []
     private var hasLoadedInitialData = false
     
     private init() {
@@ -42,6 +41,22 @@ final class CameraManager {
         saveCameras()
     }
     
+    func saveCameras() {
+        do {
+            let encodedData = try JSONEncoder().encode(cameras)
+            UserDefaults.standard.set(encodedData, forKey: "cameras")
+            print("CameraManager - Successfully saved \(cameras.count) cameras")
+        } catch {
+            print("CameraManager - Error encoding cameras: \(error)")
+        }
+    }
+    
+    func moveCamera(from source: IndexSet, to destination: Int) {
+        cameras.move(fromOffsets: source, toOffset: destination)
+        reorderCameras()
+        saveCameras()
+    }
+    
     // MARK: - Private Methods
     
     private func loadCameras() {
@@ -57,16 +72,6 @@ final class CameraManager {
             }
         } else {
             print("CameraManager - No camera data found in UserDefaults")
-        }
-    }
-    
-    private func saveCameras() {
-        do {
-            let encodedData = try JSONEncoder().encode(cameras)
-            UserDefaults.standard.set(encodedData, forKey: "cameras")
-            print("CameraManager - Successfully saved \(cameras.count) cameras")
-        } catch {
-            print("CameraManager - Error encoding cameras: \(error)")
         }
     }
     
