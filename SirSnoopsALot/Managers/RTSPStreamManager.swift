@@ -297,6 +297,12 @@ class RTSPStreamManager: ObservableObject {
         packet = nil
     }
     
+    func restartStream(url: String) {
+        print("RTSPStreamManager - Restarting previous stream: \(url)")
+        stopStream()
+        startStream(url: url)
+    }
+    
     deinit {
         stopStream()
     }

@@ -30,9 +30,17 @@ struct ContentView: View {
         .onChange(of: scenePhase) { oldPhase, newPhase in
             print("ContentView - Scene phase changed from \(oldPhase) to \(newPhase)")
             
-            if newPhase == .background {
-                // dismissWindow(id: "floating")
+            switch newPhase {
+            case .active:
+                print("ContentView - Main window becoming active, restarting stream if needed")
+                if let camera = selectedCamera {
+                    streamManager.restartStream(url: camera.url)
+                }
+            case .background:
                 print("ContentView - Main window entering background, closing floating windows")
+                streamManager.stopStream()
+            default:
+                break
             }
         }
         .onChange(of: selectedCamera) { oldCamera, newCamera in

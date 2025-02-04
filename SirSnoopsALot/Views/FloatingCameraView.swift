@@ -3,6 +3,7 @@ import SwiftUI
 struct FloatingCameraView: View {
     @State private var camera: CameraConfig?
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var streamManager = RTSPStreamManager()
     
     init(camera: CameraConfig?) {
@@ -18,6 +19,23 @@ struct FloatingCameraView: View {
         .glassBackgroundEffect(in: .rect)
         .aspectRatio(contentMode: .fit)
         .navigationTitle(camera?.name ?? "")
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            print("FloatingCameraView - Scene phase changed from \(oldPhase) to \(newPhase)")
+            
+            switch newPhase {
+            case .active:
+                print("FloatingCameraView - Window becoming active, restarting stream if needed")
+                if let validCamera = camera {
+                    print("FloatingCameraView - camera found")
+                    streamManager.restartStream(url: validCamera.url)
+                }
+            case .background:
+                print("FloatingCameraView - Window entering background, stopping stream")
+                streamManager.stopStream()
+            default:
+                break
+            }
+        }
         .onDisappear {
             print("FloatingCameraView - View disappearing for camera: \(camera?.name ?? "Unknown")")
             streamManager.stopStream()
