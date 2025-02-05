@@ -17,7 +17,7 @@ func av_err2str(_ errnum: Int32) -> String {
 
 class RTSPStreamManager: ObservableObject {
     @Published var currentFrame: UIImage?
-    @Published var currentStreamURL: String?
+    var currentStreamURL: String?
     private var formatContext: UnsafeMutablePointer<AVFormatContext>?
     private var codecContext: UnsafeMutablePointer<AVCodecContext>?
     private var frame: UnsafeMutablePointer<AVFrame>?
@@ -25,6 +25,7 @@ class RTSPStreamManager: ObservableObject {
     private var isRunning = false
     
     func startStream(url: String) {
+        currentStreamURL = url
         // Move published property update to main thread
         DispatchQueue.main.async {
             self.currentStreamURL = url

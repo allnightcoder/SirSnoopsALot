@@ -80,7 +80,7 @@ struct CameraStreamView: View {
         guard var camera = selectedCamera else { return }
         camera.showHighRes.toggle()
         selectedCamera = camera
-        CameraManager.shared.updateCameraResolution(camera, showHighRes: camera.showHighRes)
+        CameraManager.shared.updateCameraResolution(camera)
         onResolutionChange?(camera)
     }
 }

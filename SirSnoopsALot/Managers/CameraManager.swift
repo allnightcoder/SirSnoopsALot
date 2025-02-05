@@ -60,9 +60,9 @@ final class CameraManager: ObservableObject {
         saveCameras()
     }
     
-    func updateCameraResolution(_ camera: CameraConfig, showHighRes: Bool) {
+    func updateCameraResolution(_ camera: CameraConfig) {
         if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
-            cameras[index].showHighRes = showHighRes
+            cameras[index].showHighRes = camera.showHighRes
             saveCameras()
         }
     }
