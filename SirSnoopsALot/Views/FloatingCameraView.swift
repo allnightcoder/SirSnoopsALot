@@ -18,7 +18,9 @@ struct FloatingCameraView: View {
             onResolutionChange: { updatedCamera in
                 camera = updatedCamera
                 streamManager.stopStream()
-                streamManager.startStream(url: updatedCamera.url)
+                streamManager.startStreamOptimized(camera: updatedCamera) { updatedCamera in
+                    camera = updatedCamera
+                }
             }
         )
         .glassBackgroundEffect(in: .rect)
@@ -32,7 +34,9 @@ struct FloatingCameraView: View {
                 print("FloatingCameraView - Window becoming active, restarting stream if needed")
                 if let validCamera = camera {
                     print("FloatingCameraView - camera found")
-                    streamManager.restartStream(url: validCamera.url)
+                    streamManager.restartStreamOptimized(camera: validCamera) { updatedCamera in
+                        camera = updatedCamera
+                    }
                 }
             case .background:
                 print("FloatingCameraView - Window entering background, stopping stream")
@@ -48,15 +52,17 @@ struct FloatingCameraView: View {
         }
         .onAppear() {
             if let validCamera = camera {
-                streamManager.startStream(url: validCamera.url)
+                streamManager.startStreamOptimized(camera: validCamera) { updatedCamera in
+                    camera = updatedCamera
+                }
             }
         }
         .onContinueUserActivity(Activity.floatCamera) { userActivity in
             if let draggedCamera = try? userActivity.typedPayload(CameraConfig.self) {
                 print("FloatingCameraView - got dragged cam:", draggedCamera.name)
-                camera = draggedCamera
-                streamManager.stopStream()
-                streamManager.startStream(url: draggedCamera.url)
+                streamManager.startStreamOptimized(camera: draggedCamera) { updatedCamera in
+                    camera = updatedCamera
+                }
             }
             else {
                 print("FloatingCameraView - bad drag data.")

@@ -46,7 +46,7 @@ struct ContentView: View {
             case .active:
                 print("ContentView - Main window becoming active, restarting stream if needed")
                 if let camera = selectedCamera {
-                    streamManager.restartStream(url: camera.url)
+                    streamManager.restartStreamOptimized(camera: camera)
                 }
             case .background:
                 print("ContentView - Main window entering background, closing floating windows")
@@ -86,7 +86,9 @@ struct ContentView: View {
         if streamManager.currentStreamURL != newCamera.url {
             print("ContentView - Starting new stream for camera: \(newCamera.name)")
             streamManager.stopStream()
-            streamManager.startStream(url: newCamera.url)
+            streamManager.startStreamOptimized(camera: newCamera) { updatedCamera in
+                CameraManager.shared.updateStreamInfo(updatedCamera)
+            }
         } else {
             print("ContentView - Stream URL unchanged, keeping existing stream")
         }

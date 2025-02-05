@@ -2,6 +2,46 @@ import Foundation
 import CoreTransferable
 import UniformTypeIdentifiers
 
+/// Holds pre-probed (cached) RTSP metadata to speed up future stream openings.
+class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
+    // Example fields you might want to store:
+    var codecID: Int32
+    var width: Int
+    var height: Int
+    
+    // (Optional) Extra data if needed, e.g., SPS/PPS for H.264, etc.
+    // var extraData: Data?
+
+    init(codecID: Int32, width: Int, height: Int) {
+        self.codecID = codecID
+        self.width = width
+        self.height = height
+    }
+    
+    // MARK: - Hashable & Equatable
+    static func == (lhs: RTSPInfo, rhs: RTSPInfo) -> Bool {
+        return lhs.codecID == rhs.codecID
+            && lhs.width == rhs.width
+            && lhs.height == rhs.height
+    }
+    
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(codecID)
+        hasher.combine(width)
+        hasher.combine(height)
+    }
+    
+    // MARK: - Debug Description
+    var debugDescription: String {
+        """
+        RTSPInfo {
+            codecID: \(codecID)
+            resolution: \(width)x\(height)
+        }
+        """
+    }
+}
+
 struct CameraConfig: Codable, Transferable, Hashable {
     var id: UUID
     var name: String
@@ -11,10 +51,16 @@ struct CameraConfig: Codable, Transferable, Hashable {
     var order: Int
     var showHighRes: Bool
     
+    // This property selects which URL is in use.
     var url: String {
         showHighRes ? highResUrl : lowResUrl
     }
     
+    // Caches the previously probed info for faster re-open. If not nil,
+    // your RTSP manager can skip or reduce certain steps.
+    var streamInfo: RTSPInfo?
+    
+    // MARK: - Transferable
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .camera)
     }
