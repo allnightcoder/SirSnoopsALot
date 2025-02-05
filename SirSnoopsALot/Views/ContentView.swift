@@ -46,7 +46,7 @@ struct ContentView: View {
             case .active:
                 print("ContentView - Main window becoming active, restarting stream if needed")
                 if let camera = selectedCamera {
-                    streamManager.restartStream(url: camera.url, initialInfo: camera.streamInfo)
+                    streamManager.startStream(url: camera.url, initialInfo: camera.streamInfo)
                 }
             case .background:
                 print("ContentView - Main window entering background, closing floating windows")

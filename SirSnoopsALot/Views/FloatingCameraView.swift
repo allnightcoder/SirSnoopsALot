@@ -34,7 +34,7 @@ struct FloatingCameraView: View {
                 print("FloatingCameraView - Window becoming active, restarting stream if needed")
                 if let validCamera = camera {
                     print("FloatingCameraView - camera found")
-                    streamManager.restartStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
+                    streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
                         CameraManager.shared.updateStreamInfo(validCamera, streamInfo: updatedStreamInfo)
                     }
                 }

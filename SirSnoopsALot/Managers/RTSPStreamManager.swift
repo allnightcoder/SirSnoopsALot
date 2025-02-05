@@ -137,29 +137,11 @@ class RTSPStreamManager: ObservableObject {
         }
         
         // Wait briefly to ensure the decoding loop has stopped
-        print("RTSPStreamManager - sleeping 0.1 just cause IV")
-        Thread.sleep(forTimeInterval: 0.1)
+        Thread.sleep(forTimeInterval: 0.2)
         
         cleanupResources()
         
         print("RTSPStreamManager - ✅ Stream stopped and resources cleaned up")
-    }
-    
-    /// Example "restart" method if you want to keep the same URL
-    func restartStream(
-        url: String,
-        initialInfo: RTSPInfo? = nil,
-        transport: RTSPTransport = .tcp,
-        useHWAccel: Bool = false,
-        onStreamInfoUpdate: ((RTSPInfo?) -> Void)? = nil
-    ) {
-        print("RTSPStreamManager - Restarting stream: \(url)")
-        stopStream()
-        startStream(url: url,
-                    initialInfo: initialInfo,
-                    transport: transport,
-                    useHWAccel: useHWAccel,
-                    onStreamInfoUpdate: onStreamInfoUpdate)
     }
     
     deinit {
@@ -406,13 +388,12 @@ class RTSPStreamManager: ObservableObject {
                     }
                     
                     print("RTSPStreamManager - sleeping 0.5 for decode failure")
-                    Thread.sleep(forTimeInterval: 0.1)
+                    Thread.sleep(forTimeInterval: 0.5)
                 } else {
                     self.decodeFailureCount = 0
                 }
                 
-//                print("RTSPStreamManager - sleeping 0.1 just cause")
-                Thread.sleep(forTimeInterval: 0.01)
+                Thread.sleep(forTimeInterval: 0.2)
             }
         }
     }
