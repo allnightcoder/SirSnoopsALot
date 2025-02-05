@@ -5,9 +5,15 @@ import UniformTypeIdentifiers
 struct CameraConfig: Codable, Transferable, Hashable {
     var id: UUID
     var name: String
-    var url: String
+    var highResUrl: String
+    var lowResUrl: String
     var description: String
     var order: Int
+    var showHighRes: Bool
+    
+    var url: String {
+        showHighRes ? highResUrl : lowResUrl
+    }
     
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .camera)

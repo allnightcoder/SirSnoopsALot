@@ -5,6 +5,7 @@ struct CameraStreamView: View {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CameraStreamView", category: "UI")
     @Binding var selectedCamera: CameraConfig?
     let currentFrame: UIImage?
+    var onResolutionChange: ((CameraConfig) -> Void)?
     
     var body: some View {
         ZStack {
@@ -24,12 +25,29 @@ struct CameraStreamView: View {
             if let camera = selectedCamera {
                 VStack {
                     Spacer()
-                    Text(camera.name)
-                        .font(.caption)
-                        .padding(8)
-                        .background(.ultraThinMaterial)
-                        .cornerRadius(8)
-                        .padding(.bottom)
+                    HStack {
+                        Text(camera.name)
+                            .font(.caption)
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(8)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            toggleResolution()
+                        }) {
+                            Text(camera.showHighRes ? "HD" : "SD")
+                                .font(.caption.bold())
+                                .padding(8)
+                                .background(.ultraThinMaterial)
+                                .foregroundStyle(camera.showHighRes ? .primary : .secondary)
+                                .cornerRadius(8)
+                        }
+                        .animation(.smooth, value: camera.showHighRes)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
             }
         }
@@ -51,19 +69,33 @@ struct CameraStreamView: View {
         }
         .dropDestination(for: CameraConfig.self) { items, location in
             if let camera = items.first {
-                print("yup \(camera.url)")
                 self.selectedCamera = camera
                 return true
-            } else {
-                return false
             }
+            return false
         }
+    }
+    
+    private func toggleResolution() {
+        guard var camera = selectedCamera else { return }
+        camera.showHighRes.toggle()
+        selectedCamera = camera
+        CameraManager.shared.updateCameraResolution(camera, showHighRes: camera.showHighRes)
+        onResolutionChange?(camera)
     }
 }
 
 #Preview {
     CameraStreamView(
-        selectedCamera: .constant(CameraConfig(id: UUID(), name: "Test Camera", url: "rtsp://example.com/stream", description: "description", order: 0)),
+        selectedCamera: .constant(CameraConfig(
+            id: UUID(),
+            name: "Test Camera",
+            highResUrl: "rtsp://example.com/stream1",
+            lowResUrl: "rtsp://example.com/stream2",
+            description: "description",
+            order: 0,
+            showHighRes: false
+        )),
         currentFrame: nil
     )
 } 

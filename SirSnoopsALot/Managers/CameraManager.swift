@@ -13,23 +13,26 @@ final class CameraManager: ObservableObject {
     
     // MARK: - Public Methods
     
-    func addCamera(name: String, url: String, description: String) {
+    func addCamera(name: String, highResUrl: String, lowResUrl: String, description: String) {
         let newCamera = CameraConfig(
             id: UUID(),
             name: name,
-            url: url,
+            highResUrl: highResUrl,
+            lowResUrl: lowResUrl,
             description: description,
-            order: getNextOrder()
+            order: getNextOrder(),
+            showHighRes: false
         )
         cameras.append(newCamera)
         cameras.sort(by: { $0.order < $1.order })
         saveCameras()
     }
     
-    func updateCamera(_ camera: CameraConfig, name: String, url: String, description: String) {
+    func updateCamera(_ camera: CameraConfig, name: String, highResUrl: String, lowResUrl: String, description: String) {
         if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
             cameras[index].name = name
-            cameras[index].url = url
+            cameras[index].highResUrl = highResUrl
+            cameras[index].lowResUrl = lowResUrl
             cameras[index].description = description
             saveCameras()
         }
@@ -55,6 +58,13 @@ final class CameraManager: ObservableObject {
         cameras.move(fromOffsets: source, toOffset: destination)
         reorderCameras()
         saveCameras()
+    }
+    
+    func updateCameraResolution(_ camera: CameraConfig, showHighRes: Bool) {
+        if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
+            cameras[index].showHighRes = showHighRes
+            saveCameras()
+        }
     }
     
     // MARK: - Private Methods

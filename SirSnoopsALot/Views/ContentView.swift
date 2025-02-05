@@ -19,10 +19,22 @@ struct ContentView: View {
                 selectedCamera: $selectedCamera
             )
             .navigationDestination(for: CameraConfig.self) { camera in
-                CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)
+                CameraStreamView(
+                    selectedCamera: $selectedCamera, 
+                    currentFrame: streamManager.currentFrame,
+                    onResolutionChange: { camera in
+                        switchCameras(newCamera: camera)
+                    }
+                )
             }
         } detail: {
-            CameraStreamView(selectedCamera: $selectedCamera, currentFrame: streamManager.currentFrame)
+            CameraStreamView(
+                selectedCamera: $selectedCamera, 
+                currentFrame: streamManager.currentFrame,
+                onResolutionChange: { camera in
+                    switchCameras(newCamera: camera)
+                }
+            )
         }
         .onAppear {
             selectedCamera = cameraManager.cameras.first

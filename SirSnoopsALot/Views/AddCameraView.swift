@@ -6,7 +6,8 @@ struct AddCameraView: View {
     @State private var cameraManager = CameraManager.shared
     
     @State private var name: String = ""
-    @State private var url: String = ""
+    @State private var highResUrl: String = ""
+    @State private var lowResUrl: String = ""
     @State private var description: String = ""
     
     init(editingCamera: CameraConfig? = nil) {
@@ -14,16 +15,17 @@ struct AddCameraView: View {
         
         if let camera = editingCamera {
             _name = State(initialValue: camera.name)
-            _url = State(initialValue: camera.url)
+            _highResUrl = State(initialValue: camera.highResUrl)
+            _lowResUrl = State(initialValue: camera.lowResUrl)
             _description = State(initialValue: camera.description)
         }
     }
     
     private func saveCamera() {
         if let editingCamera = editingCamera {
-            cameraManager.updateCamera(editingCamera, name: name, url: url, description: description)
+            cameraManager.updateCamera(editingCamera, name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description)
         } else {
-            cameraManager.addCamera(name: name, url: url, description: description)
+            cameraManager.addCamera(name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description)
         }
         dismiss()
     }
@@ -33,7 +35,8 @@ struct AddCameraView: View {
             Form {
                 Section(header: Text("Camera Details")) {
                     TextField("Name", text: $name)
-                    TextField("RTSP URL", text: $url)
+                    TextField("High Resolution RTSP URL", text: $highResUrl)
+                    TextField("Low Resolution RTSP URL", text: $lowResUrl)
                     TextField("Description", text: $description)
                 }
             }
@@ -49,7 +52,7 @@ struct AddCameraView: View {
                     Button(editingCamera != nil ? "Update" : "Save") {
                         saveCamera()
                     }
-                    .disabled(name.isEmpty || url.isEmpty)
+                    .disabled(name.isEmpty || highResUrl.isEmpty || lowResUrl.isEmpty)
                 }
             }
         }

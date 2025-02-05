@@ -14,7 +14,12 @@ struct FloatingCameraView: View {
     var body: some View {
         CameraStreamView(
             selectedCamera: .constant(camera),
-            currentFrame: streamManager.currentFrame
+            currentFrame: streamManager.currentFrame,
+            onResolutionChange: { updatedCamera in
+                camera = updatedCamera
+                streamManager.stopStream()
+                streamManager.startStream(url: updatedCamera.url)
+            }
         )
         .glassBackgroundEffect(in: .rect)
         .aspectRatio(contentMode: .fit)
