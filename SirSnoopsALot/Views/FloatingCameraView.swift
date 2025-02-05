@@ -18,8 +18,8 @@ struct FloatingCameraView: View {
             onResolutionChange: { updatedCamera in
                 camera = updatedCamera
                 streamManager.stopStream()
-                streamManager.startStreamOptimized(camera: updatedCamera) { updatedCamera in
-                    camera = updatedCamera
+                streamManager.startStream(url: updatedCamera.url, initialInfo: updatedCamera.streamInfo) { updatedStreamInfo in
+                    CameraManager.shared.updateStreamInfo(updatedCamera, streamInfo: updatedStreamInfo)
                 }
             }
         )
@@ -34,8 +34,8 @@ struct FloatingCameraView: View {
                 print("FloatingCameraView - Window becoming active, restarting stream if needed")
                 if let validCamera = camera {
                     print("FloatingCameraView - camera found")
-                    streamManager.restartStreamOptimized(camera: validCamera) { updatedCamera in
-                        camera = updatedCamera
+                    streamManager.restartStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
+                        CameraManager.shared.updateStreamInfo(validCamera, streamInfo: updatedStreamInfo)
                     }
                 }
             case .background:
@@ -52,16 +52,16 @@ struct FloatingCameraView: View {
         }
         .onAppear() {
             if let validCamera = camera {
-                streamManager.startStreamOptimized(camera: validCamera) { updatedCamera in
-                    camera = updatedCamera
+                streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
+                    CameraManager.shared.updateStreamInfo(validCamera, streamInfo: updatedStreamInfo)
                 }
             }
         }
         .onContinueUserActivity(Activity.floatCamera) { userActivity in
             if let draggedCamera = try? userActivity.typedPayload(CameraConfig.self) {
                 print("FloatingCameraView - got dragged cam:", draggedCamera.name)
-                streamManager.startStreamOptimized(camera: draggedCamera) { updatedCamera in
-                    camera = updatedCamera
+                streamManager.startStream(url: draggedCamera.url, initialInfo: draggedCamera.streamInfo) { updatedStreamInfo in
+                    CameraManager.shared.updateStreamInfo(draggedCamera, streamInfo: updatedStreamInfo)
                 }
             }
             else {

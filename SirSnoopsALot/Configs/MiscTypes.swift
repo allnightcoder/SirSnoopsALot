@@ -4,18 +4,18 @@ import UniformTypeIdentifiers
 
 /// Holds pre-probed (cached) RTSP metadata to speed up future stream openings.
 class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
-    // Example fields you might want to store:
     var codecID: Int32
     var width: Int
     var height: Int
-    
-    // (Optional) Extra data if needed, e.g., SPS/PPS for H.264, etc.
-    // var extraData: Data?
 
-    init(codecID: Int32, width: Int, height: Int) {
+    /// Extra data for the codec (e.g. H.264 SPS/PPS).
+    var extraData: Data?
+    
+    init(codecID: Int32, width: Int, height: Int, extraData: Data?) {
         self.codecID = codecID
         self.width = width
         self.height = height
+        self.extraData = extraData
     }
     
     // MARK: - Hashable & Equatable
@@ -23,12 +23,14 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
         return lhs.codecID == rhs.codecID
             && lhs.width == rhs.width
             && lhs.height == rhs.height
+            && lhs.extraData == rhs.extraData
     }
     
     func hash(into hasher: inout Hasher) {
         hasher.combine(codecID)
         hasher.combine(width)
         hasher.combine(height)
+        // Not strictly necessary to hash extradata, but you could.
     }
     
     // MARK: - Debug Description
@@ -37,6 +39,7 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
         RTSPInfo {
             codecID: \(codecID)
             resolution: \(width)x\(height)
+            extraData: \(extraData?.count ?? 0) bytes
         }
         """
     }

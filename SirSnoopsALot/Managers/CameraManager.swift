@@ -38,30 +38,36 @@ final class CameraManager: ObservableObject {
         }
     }
     
-    func updateStreamInfo(_ camera: CameraConfig) {
+    func updateStreamInfo(_ camera: CameraConfig, streamInfo: RTSPInfo?) {
         if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
             let oldStreamInfo = cameras[index].streamInfo
-            let newStreamInfo = camera.streamInfo
-            print("CameraManager - Updating stream info for camera \(camera.name)")
+            let newStreamInfo = streamInfo
             
-            // Print old stream info
-            if let old = oldStreamInfo {
-                print("CameraManager - Old stream info:")
-                print(old.debugDescription)
+            // Only proceed if the stream info has actually changed
+            if oldStreamInfo != newStreamInfo {
+                print("CameraManager - Updating stream info for camera \(camera.name)")
+                
+                // Print old stream info
+                if let old = oldStreamInfo {
+                    print("CameraManager - Old stream info:")
+                    print(old.debugDescription)
+                } else {
+                    print("CameraManager - Old stream info: nil")
+                }
+                
+                // Print new stream info
+                if let new = newStreamInfo {
+                    print("CameraManager - New stream info:")
+                    print(new.debugDescription)
+                } else {
+                    print("CameraManager - New stream info: nil")
+                }
+                
+                cameras[index].streamInfo = newStreamInfo
+                saveCameras()
             } else {
-                print("CameraManager - Old stream info: nil")
+                print("CameraManager - Stream info unchanged for camera \(camera.name)")
             }
-            
-            // Print new stream info
-            if let new = newStreamInfo {
-                print("CameraManager - New stream info:")
-                print(new.debugDescription)
-            } else {
-                print("CameraManager - New stream info: nil")
-            }
-            
-            cameras[index].streamInfo = newStreamInfo
-            saveCameras()
         }
     }
     
