@@ -7,14 +7,18 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
     var codecID: Int32
     var width: Int
     var height: Int
+    var format: Int
+    var bitRate: Int64
 
     /// Extra data for the codec (e.g. H.264 SPS/PPS).
     var extraData: Data?
     
-    init(codecID: Int32, width: Int, height: Int, extraData: Data?) {
+    init(codecID: Int32, width: Int, height: Int, format: Int, bitRate: Int64, extraData: Data?) {
         self.codecID = codecID
         self.width = width
         self.height = height
+        self.format = format
+        self.bitRate = bitRate
         self.extraData = extraData
     }
     
@@ -23,6 +27,8 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
         return lhs.codecID == rhs.codecID
             && lhs.width == rhs.width
             && lhs.height == rhs.height
+            && lhs.format == rhs.format
+            && lhs.bitRate == rhs.bitRate
             && lhs.extraData == rhs.extraData
     }
     
@@ -30,6 +36,8 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
         hasher.combine(codecID)
         hasher.combine(width)
         hasher.combine(height)
+        hasher.combine(format)
+        hasher.combine(bitRate)
         // Not strictly necessary to hash extradata, but you could.
     }
     
@@ -39,6 +47,8 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
         RTSPInfo {
             codecID: \(codecID)
             resolution: \(width)x\(height)
+            format: \(format)
+            bitRate: \(bitRate)
             extraData: \(extraData?.count ?? 0) bytes
         }
         """

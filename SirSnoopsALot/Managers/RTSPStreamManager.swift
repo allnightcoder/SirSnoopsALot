@@ -37,6 +37,7 @@ class RTSPStreamManager: ObservableObject {
     private var packet: UnsafeMutablePointer<AVPacket>?
     
     private var isRunning = false
+    private var videoStreamIndex = Int32(-1)
     
     // Called when we discover or reaffirm new RTSP info
     private var onStreamInfoUpdate: ((RTSPInfo?) -> Void)?
@@ -112,7 +113,10 @@ class RTSPStreamManager: ObservableObject {
         useHWAccel: Bool = false,
         onStreamInfoUpdate: ((RTSPInfo?) -> Void)? = nil
     ) {
-        self.currentStreamURL = url
+        // Move published property update to main thread
+        DispatchQueue.main.async {
+            self.currentStreamURL = url
+        }
         self.cachedRTSPInfo = initialInfo
         self.onStreamInfoUpdate = onStreamInfoUpdate
         self.fallbackAllowed = true
@@ -156,7 +160,8 @@ class RTSPStreamManager: ObservableObject {
         if let info = cachedRTSPInfo {
             // We have prior info => skip find_stream_info if possible
             print("RTSPStreamManager - Using AGGRESSIVE open with cached info: \(info.debugDescription)")
-            openStreamAggressive(url: url, transport: transport, useHWAccel: useHWAccel, info: info)
+//            openStreamAggressive(url: url, transport: transport, useHWAccel: useHWAccel, info: info)
+            openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
         } else {
             // No cached info => do full approach
             print("RTSPStreamManager - No cached info, calling openStreamDefault")
@@ -168,19 +173,17 @@ class RTSPStreamManager: ObservableObject {
     
     private func openStreamDefault(url: String, transport: RTSPTransport, useHWAccel: Bool) {
         var options: OpaquePointer? = defaultDictionary(transport: transport, useHWAccel: useHWAccel)
-        
-        var formatCtx: UnsafeMutablePointer<AVFormatContext>? = nil
-        let resOpen = avformat_open_input(&formatCtx, url, nil, &options)
         av_dict_free(&options)
         
-        guard resOpen >= 0, let validCtx = formatCtx else {
-            print("RTSPStreamManager - ❌ openStreamDefault failed open_input")
+        var formatContext: UnsafeMutablePointer<AVFormatContext>? = nil
+        guard avformat_open_input(&formatContext, url, nil, nil) >= 0, let validCtx = formatContext else {
+            print("RTSPStreamManager - Failed to open input: \(url)")
             return
         }
         self.formatContext = validCtx
         
         // Full analysis
-        if avformat_find_stream_info(validCtx, nil) < 0 {
+        guard avformat_find_stream_info(validCtx, nil) >= 0 else {
             print("RTSPStreamManager - ❌ openStreamDefault: avformat_find_stream_info failed")
             cleanupResources()
             return
@@ -188,14 +191,17 @@ class RTSPStreamManager: ObservableObject {
         print("RTSPStreamManager - ✅ openStreamDefault: found stream info")
         
         // Find the video stream
-        var videoStreamIndex: Int32 = -1
+        self.videoStreamIndex = Int32(-1)
         for i in 0..<Int(validCtx.pointee.nb_streams) {
             let stream = validCtx.pointee.streams[i]
+            print("RTSPStreamManager - Stream[\(i)] type: \(stream?.pointee.codecpar.pointee.codec_type.rawValue ?? -1)")
             if stream?.pointee.codecpar.pointee.codec_type == AVMEDIA_TYPE_VIDEO {
                 videoStreamIndex = Int32(i)
                 break
             }
         }
+        print("RTSPStreamManager - Found videoStreamIndex: \(videoStreamIndex)")
+        
         guard videoStreamIndex != -1 else {
             print("RTSPStreamManager - No video stream found in default open")
             return
@@ -206,10 +212,21 @@ class RTSPStreamManager: ObservableObject {
             return
         }
         
+        print("""
+        RTSPStreamManager - Codec Parameters:
+        - codec_id: \(codecParams.pointee.codec_id.rawValue)
+        - width: \(codecParams.pointee.width)
+        - height: \(codecParams.pointee.height)
+        - format: \(codecParams.pointee.format)
+        - bit_rate: \(codecParams.pointee.bit_rate)
+        - extradata_size: \(codecParams.pointee.extradata_size)
+        """)
+        
         guard let codec = avcodec_find_decoder(codecParams.pointee.codec_id) else {
             print("RTSPStreamManager - Failed to find decoder in default open")
             return
         }
+        print("RTSPStreamManager - Found codec: \(String(cString: codec.pointee.name))")
         
         codecContext = avcodec_alloc_context3(codec)
         guard let codecCtx = codecContext else {
@@ -236,6 +253,8 @@ class RTSPStreamManager: ObservableObject {
         let discoveredCodecID = Int32(codecParams.pointee.codec_id.rawValue)
         let discoveredWidth = Int(codecParams.pointee.width)
         let discoveredHeight = Int(codecParams.pointee.height)
+        let discoveredFormat = Int(codecParams.pointee.format)
+        let discoveredBitRate = Int64(codecParams.pointee.bit_rate)
         
         // Extract extradata if present
         var extradataData: Data? = nil
@@ -248,6 +267,8 @@ class RTSPStreamManager: ObservableObject {
         let newInfo = RTSPInfo(codecID: discoveredCodecID,
                                width: discoveredWidth,
                                height: discoveredHeight,
+                               format: discoveredFormat,
+                               bitRate: discoveredBitRate,
                                extraData: extradataData)
         
         // Notify the caller that we've discovered new info
@@ -383,7 +404,7 @@ class RTSPStreamManager: ObservableObject {
                         self.fallbackAllowed = false
                         
                         // Try again with default
-                        self.openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
+                        //self.openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
                         break
                     }
                     
@@ -393,7 +414,7 @@ class RTSPStreamManager: ObservableObject {
                     self.decodeFailureCount = 0
                 }
                 
-                Thread.sleep(forTimeInterval: 0.2)
+                Thread.sleep(forTimeInterval: 0.01) // 0.01 = ~10fps
             }
         }
     }
@@ -408,10 +429,10 @@ class RTSPStreamManager: ObservableObject {
         }
         
         // Reset packet before reading
-        av_packet_unref(packet)
+//        av_packet_unref(packet)
         
         // Guard against invalid state
-        guard isRunning else { return false }
+//        guard isRunning else { return false }
         
         // Read frame with additional error handling
         let readResult = av_read_frame(formatContext, packet)
@@ -437,7 +458,7 @@ class RTSPStreamManager: ObservableObject {
         }
         
         // Ignore packets that aren't video
-        if packet.pointee.stream_index != 0 {  // Assuming video is stream 0
+        if packet.pointee.stream_index != self.videoStreamIndex {
             av_packet_unref(packet)
             return true
         }
@@ -448,20 +469,13 @@ class RTSPStreamManager: ObservableObject {
             av_packet_unref(packet)
             return false
         }
-        
-        while true {
-            let receiveResult = avcodec_receive_frame(codecContext, frame)
-            if receiveResult == AVERROR(EAGAIN) || receiveResult == AVERROR_EOF {
-                break
-            } else if receiveResult < 0 {
-                print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
-                break
-            }
-            
+        let receiveResult = avcodec_receive_frame(codecContext, frame)
+        if receiveResult >= 0 {
             convertFrameToImage(frame)
-            av_frame_unref(frame)
+        } else if receiveResult != AVERROR(EAGAIN) {
+            print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
         }
-        
+
         av_packet_unref(packet)
         return true
     }
@@ -609,6 +623,8 @@ class RTSPStreamManager: ObservableObject {
             av_packet_free(&tempPacket)
             self.packet = nil
         }
+        
+        self.videoStreamIndex = -1
         
         DispatchQueue.main.async {
             self.currentFrame = nil
