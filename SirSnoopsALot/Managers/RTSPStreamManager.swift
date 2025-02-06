@@ -160,8 +160,7 @@ class RTSPStreamManager: ObservableObject {
         if let info = cachedRTSPInfo {
             // We have prior info => skip find_stream_info if possible
             print("RTSPStreamManager - Using AGGRESSIVE open with cached info: \(info.debugDescription)")
-//            openStreamAggressive(url: url, transport: transport, useHWAccel: useHWAccel, info: info)
-            openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
+            openStreamAggressive(url: url, transport: transport, useHWAccel: useHWAccel, info: info)
         } else {
             // No cached info => do full approach
             print("RTSPStreamManager - No cached info, calling openStreamDefault")
@@ -255,6 +254,7 @@ class RTSPStreamManager: ObservableObject {
         let discoveredHeight = Int(codecParams.pointee.height)
         let discoveredFormat = Int(codecParams.pointee.format)
         let discoveredBitRate = Int64(codecParams.pointee.bit_rate)
+        let discoveredVideoStreamIndex = self.videoStreamIndex
         
         // Extract extradata if present
         var extradataData: Data? = nil
@@ -269,6 +269,7 @@ class RTSPStreamManager: ObservableObject {
                                height: discoveredHeight,
                                format: discoveredFormat,
                                bitRate: discoveredBitRate,
+                               videoStreamIndex: discoveredVideoStreamIndex,
                                extraData: extradataData)
         
         // Notify the caller that we've discovered new info
@@ -312,9 +313,9 @@ class RTSPStreamManager: ObservableObject {
             return
         }
         
-        // We'll assume stream index 0 for video, or pick first that is video
-        let stream = validFormatCtx.pointee.streams[0]
-        // If you need to verify it's video, do so. We'll keep it simple:
+        // Find the video stream
+        self.videoStreamIndex = info.videoStreamIndex
+        print("RTSPStreamManager - Using videoStreamIndex: \(videoStreamIndex)")
         
         // Create codec context from the cached info
         let wantedCodecID = AVCodecID(UInt32(info.codecID))
@@ -404,7 +405,7 @@ class RTSPStreamManager: ObservableObject {
                         self.fallbackAllowed = false
                         
                         // Try again with default
-                        //self.openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
+                        self.openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
                         break
                     }
                     
@@ -427,12 +428,6 @@ class RTSPStreamManager: ObservableObject {
             print("RTSPStreamManager - Nil contexts in readNextFrame")
             return false
         }
-        
-        // Reset packet before reading
-//        av_packet_unref(packet)
-        
-        // Guard against invalid state
-//        guard isRunning else { return false }
         
         // Read frame with additional error handling
         let readResult = av_read_frame(formatContext, packet)

@@ -9,16 +9,18 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
     var height: Int
     var format: Int
     var bitRate: Int64
+    var videoStreamIndex: Int32
 
     /// Extra data for the codec (e.g. H.264 SPS/PPS).
     var extraData: Data?
     
-    init(codecID: Int32, width: Int, height: Int, format: Int, bitRate: Int64, extraData: Data?) {
+    init(codecID: Int32, width: Int, height: Int, format: Int, bitRate: Int64, videoStreamIndex: Int32, extraData: Data?) {
         self.codecID = codecID
         self.width = width
         self.height = height
         self.format = format
         self.bitRate = bitRate
+        self.videoStreamIndex = videoStreamIndex
         self.extraData = extraData
     }
     
@@ -29,6 +31,7 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
             && lhs.height == rhs.height
             && lhs.format == rhs.format
             && lhs.bitRate == rhs.bitRate
+            && lhs.videoStreamIndex == rhs.videoStreamIndex
             && lhs.extraData == rhs.extraData
     }
     
@@ -49,6 +52,7 @@ class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
             resolution: \(width)x\(height)
             format: \(format)
             bitRate: \(bitRate)
+            videoStreamIndex: \(videoStreamIndex)
             extraData: \(extraData?.count ?? 0) bytes
         }
         """
