@@ -38,7 +38,7 @@ final class CameraManager: ObservableObject {
         }
     }
     
-    func updateStreamInfo(_ camera: CameraConfig, streamInfo: RTSPInfo?) {
+    func updateStreamInfo(_ camera: CameraConfig, isHighRes: Bool, streamInfo: RTSPInfo?) {
         if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
             let oldStreamInfo = cameras[index].streamInfo
             let newStreamInfo = streamInfo

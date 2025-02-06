@@ -67,15 +67,25 @@ struct CameraConfig: Codable, Transferable, Hashable {
     var description: String
     var order: Int
     var showHighRes: Bool
+    var highResStreamInfo: RTSPInfo?
+    var lowResStreamInfo: RTSPInfo?
     
-    // This property selects which URL is in use.
     var url: String {
         showHighRes ? highResUrl : lowResUrl
     }
     
-    // Caches the previously probed info for faster re-open. If not nil,
-    // your RTSP manager can skip or reduce certain steps.
-    var streamInfo: RTSPInfo?
+    var streamInfo: RTSPInfo? {
+        get {
+            showHighRes ? highResStreamInfo : lowResStreamInfo
+        }
+        set {
+            if showHighRes {
+                highResStreamInfo = newValue
+            } else {
+                lowResStreamInfo = newValue
+            }
+        }
+    }
     
     // MARK: - Transferable
     static var transferRepresentation: some TransferRepresentation {

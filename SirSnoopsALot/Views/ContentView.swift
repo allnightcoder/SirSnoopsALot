@@ -87,7 +87,7 @@ struct ContentView: View {
             print("ContentView - Starting new stream for camera: \(newCamera.name)")
             streamManager.stopStream()
             streamManager.startStream(url: newCamera.url, initialInfo: newCamera.streamInfo) { updatedStreamInfo in
-                CameraManager.shared.updateStreamInfo(newCamera, streamInfo: updatedStreamInfo)
+                CameraManager.shared.updateStreamInfo(newCamera, isHighRes: newCamera.showHighRes, streamInfo: updatedStreamInfo)
             }
         } else {
             print("ContentView - Stream URL unchanged, keeping existing stream")

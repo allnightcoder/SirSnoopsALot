@@ -19,7 +19,7 @@ struct FloatingCameraView: View {
                 camera = updatedCamera
                 streamManager.stopStream()
                 streamManager.startStream(url: updatedCamera.url, initialInfo: updatedCamera.streamInfo) { updatedStreamInfo in
-                    CameraManager.shared.updateStreamInfo(updatedCamera, streamInfo: updatedStreamInfo)
+                    CameraManager.shared.updateStreamInfo(updatedCamera, isHighRes: updatedCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }
             }
         )
@@ -35,7 +35,7 @@ struct FloatingCameraView: View {
                 if let validCamera = camera {
                     print("FloatingCameraView - camera found")
                     streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
-                        CameraManager.shared.updateStreamInfo(validCamera, streamInfo: updatedStreamInfo)
+                        CameraManager.shared.updateStreamInfo(validCamera, isHighRes: validCamera.showHighRes, streamInfo: updatedStreamInfo)
                     }
                 }
             case .background:
@@ -53,7 +53,7 @@ struct FloatingCameraView: View {
         .onAppear() {
             if let validCamera = camera {
                 streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
-                    CameraManager.shared.updateStreamInfo(validCamera, streamInfo: updatedStreamInfo)
+                    CameraManager.shared.updateStreamInfo(validCamera, isHighRes: validCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }
             }
         }
@@ -61,7 +61,7 @@ struct FloatingCameraView: View {
             if let draggedCamera = try? userActivity.typedPayload(CameraConfig.self) {
                 print("FloatingCameraView - got dragged cam:", draggedCamera.name)
                 streamManager.startStream(url: draggedCamera.url, initialInfo: draggedCamera.streamInfo) { updatedStreamInfo in
-                    CameraManager.shared.updateStreamInfo(draggedCamera, streamInfo: updatedStreamInfo)
+                    CameraManager.shared.updateStreamInfo(draggedCamera, isHighRes: draggedCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }
             }
             else {
