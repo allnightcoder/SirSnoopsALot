@@ -5,6 +5,7 @@ struct FloatingCameraView: View {
     @Environment(\.dismissWindow) private var dismissWindow
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var streamManager = RTSPStreamManager()
+    @AppStorage("showFloatingControls") private var showFloatingControls = false
     
     init(camera: CameraConfig?) {
         _camera = State(initialValue: camera)
@@ -22,7 +23,7 @@ struct FloatingCameraView: View {
                     CameraManager.shared.updateStreamInfo(updatedCamera, isHighRes: updatedCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }
             },
-            showControls: false
+            showControls: showFloatingControls
         )
         .glassBackgroundEffect(in: .rect)
         .aspectRatio(contentMode: .fit)

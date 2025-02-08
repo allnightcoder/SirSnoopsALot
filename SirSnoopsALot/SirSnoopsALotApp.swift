@@ -4,7 +4,9 @@ import SwiftUI
 
 
 #Preview {
-    ContentView()
+    let app = SirSnoopsALotApp()
+    return ContentView()
+        .environmentObject(CameraManager.shared)
 }
 
 @main
@@ -53,6 +55,7 @@ struct SirSnoopsALotApp: App {
             }
             
             userDefaults.set(false, forKey: "showCameraFeedBorder")
+            userDefaults.set(false, forKey: "showFloatingControls")
         }
     }
 }
