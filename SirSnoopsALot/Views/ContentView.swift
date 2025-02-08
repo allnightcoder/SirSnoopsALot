@@ -24,7 +24,8 @@ struct ContentView: View {
                     currentFrame: streamManager.currentFrame,
                     onResolutionChange: { camera in
                         switchCameras(newCamera: camera)
-                    }
+                    },
+                    showControls: true
                 )
             }
         } detail: {
@@ -33,7 +34,8 @@ struct ContentView: View {
                 currentFrame: streamManager.currentFrame,
                 onResolutionChange: { camera in
                     switchCameras(newCamera: camera)
-                }
+                },
+                showControls: true
             )
         }
         .onAppear {

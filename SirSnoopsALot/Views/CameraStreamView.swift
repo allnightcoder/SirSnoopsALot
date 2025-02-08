@@ -6,6 +6,7 @@ struct CameraStreamView: View {
     @Binding var selectedCamera: CameraConfig?
     let currentFrame: UIImage?
     var onResolutionChange: ((CameraConfig) -> Void)?
+    let showControls: Bool
     
     var body: some View {
         ZStack {
@@ -22,7 +23,7 @@ struct CameraStreamView: View {
                 }
             }
             
-            if let camera = selectedCamera {
+            if showControls, let camera = selectedCamera {
                 VStack {
                     Spacer()
                     HStack {
@@ -96,6 +97,7 @@ struct CameraStreamView: View {
             order: 0,
             showHighRes: false
         )),
-        currentFrame: nil
+        currentFrame: nil,
+        showControls: true
     )
 } 

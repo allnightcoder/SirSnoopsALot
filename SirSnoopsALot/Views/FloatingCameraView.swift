@@ -21,13 +21,15 @@ struct FloatingCameraView: View {
                 streamManager.startStream(url: updatedCamera.url, initialInfo: updatedCamera.streamInfo) { updatedStreamInfo in
                     CameraManager.shared.updateStreamInfo(updatedCamera, isHighRes: updatedCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }
-            }
+            },
+            showControls: false
         )
         .glassBackgroundEffect(in: .rect)
         .aspectRatio(contentMode: .fit)
         .navigationTitle(camera?.name ?? "")
         .onChange(of: scenePhase) { oldPhase, newPhase in
             print("FloatingCameraView - Scene phase changed from \(oldPhase) to \(newPhase)")
+            print("FloatingCameraView - Current camera state: \(camera?.name ?? "nil")")
             
             switch newPhase {
             case .active:
@@ -37,9 +39,11 @@ struct FloatingCameraView: View {
                     streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
                         CameraManager.shared.updateStreamInfo(validCamera, isHighRes: validCamera.showHighRes, streamInfo: updatedStreamInfo)
                     }
+                } else {
+                    print("FloatingCameraView - No camera available to restart stream")
                 }
             case .background:
-                print("FloatingCameraView - Window entering background, stopping stream")
+                print("FloatingCameraView - Window entering background, stopping stream for camera: \(camera?.name ?? "Unknown")")
                 streamManager.stopStream()
             default:
                 break
@@ -60,6 +64,7 @@ struct FloatingCameraView: View {
         .onContinueUserActivity(Activity.floatCamera) { userActivity in
             if let draggedCamera = try? userActivity.typedPayload(CameraConfig.self) {
                 print("FloatingCameraView - got dragged cam:", draggedCamera.name)
+                camera = draggedCamera
                 streamManager.startStream(url: draggedCamera.url, initialInfo: draggedCamera.streamInfo) { updatedStreamInfo in
                     CameraManager.shared.updateStreamInfo(draggedCamera, isHighRes: draggedCamera.showHighRes, streamInfo: updatedStreamInfo)
                 }

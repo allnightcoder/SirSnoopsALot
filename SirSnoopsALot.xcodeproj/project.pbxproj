@@ -284,7 +284,6 @@
 				"EXCLUDED_ARCHS[sdk=xrsimulator*]" = "";
 				"FRAMEWORK_SEARCH_PATHS[arch=*]" = "$(SRCROOT)/FFmpegLibs/visionos-xcframework";
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = SirSnoopsALot/Info.plist;
 				"HEADER_SEARCH_PATHS[sdk=xros*]" = (
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavformat.xcframework/xros-arm64/Headers",
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libavcodec.xcframework/xros-arm64/Headers",
@@ -301,6 +300,7 @@
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswresample.xcframework/xros-arm64-simulator/Headers",
 					"$(SRCROOT)/FFmpegLibs/visionos-xcframework/libswscale.xcframework/xros-arm64-simulator/Headers",
 				);
+				INFOPLIST_FILE = SirSnoopsALot/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
