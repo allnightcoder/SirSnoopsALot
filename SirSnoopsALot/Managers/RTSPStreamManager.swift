@@ -51,6 +51,11 @@ class RTSPStreamManager: ObservableObject {
     
     // Cache of previously known RTSP info. If non-nil, we attempt an "aggressive" approach.
     private var cachedRTSPInfo: RTSPInfo?
+
+    // Minimal logging flags
+    private var didLogVTReady = false
+    private var didLogVTActive = false
+    private var didLogSWActive = false
     
     // MARK: - Dictionaries
     
@@ -239,8 +244,9 @@ class RTSPStreamManager: ObservableObject {
         }
         // Soft-enable VideoToolbox: try to set up hw device; ignore errors and continue in software
         let vtSetupDefault = ssa_setup_videotoolbox(codecCtx)
-        if vtSetupDefault < 0 {
-            // Continue with software decode
+        if vtSetupDefault >= 0, !didLogVTReady {
+            print("RTSPStreamManager - VideoToolbox hwaccel available (soft-enabled)")
+            didLogVTReady = true
         }
         
         let resCodecOpen = avcodec_open2(codecCtx, codec, nil)
@@ -358,8 +364,9 @@ class RTSPStreamManager: ObservableObject {
         
         // Soft-enable VideoToolbox
         let vtSetup = ssa_setup_videotoolbox(codecCtx)
-        if vtSetup < 0 {
-            // Continue with software decode
+        if vtSetup >= 0, !didLogVTReady {
+            print("RTSPStreamManager - VideoToolbox hwaccel available (soft-enabled)")
+            didLogVTReady = true
         }
         let openCodecRes = avcodec_open2(codecCtx, codec, nil)
         if openCodecRes < 0 {
@@ -480,6 +487,10 @@ class RTSPStreamManager: ObservableObject {
         if receiveResult >= 0 {
             // If we received a hardware frame, transfer to software frame for rendering
             if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
+                if !didLogVTActive {
+                    print("RTSPStreamManager - Using VideoToolbox hardware decoding")
+                    didLogVTActive = true
+                }
                 if let swFrame = av_frame_alloc() {
                     if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
                         convertFrameToImage(swFrame)
@@ -490,6 +501,10 @@ class RTSPStreamManager: ObservableObject {
                     av_frame_free(&tmp)
                 }
             } else {
+                if !didLogSWActive {
+                    print("RTSPStreamManager - Using software decoding")
+                    didLogSWActive = true
+                }
                 convertFrameToImage(frame)
             }
         } else if receiveResult != AVERROR(EAGAIN) {
@@ -645,6 +660,9 @@ class RTSPStreamManager: ObservableObject {
         }
         
         self.videoStreamIndex = -1
+        self.didLogVTReady = false
+        self.didLogVTActive = false
+        self.didLogSWActive = false
         
         DispatchQueue.main.async {
             self.currentFrame = nil
