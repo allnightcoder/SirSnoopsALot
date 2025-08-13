@@ -334,6 +334,14 @@
 					"-lavutil",
 					"-lswresample",
 					"-lswscale",
+					"-framework",
+					"VideoToolbox",
+					"-framework",
+					"CoreMedia",
+					"-framework",
+					"CoreVideo",
+					"-framework",
+					"AVFoundation",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -408,6 +416,14 @@
 					"-lavutil",
 					"-lswresample",
 					"-lswscale",
+					"-framework",
+					"VideoToolbox",
+					"-framework",
+					"CoreMedia",
+					"-framework",
+					"CoreVideo",
+					"-framework",
+					"AVFoundation",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";

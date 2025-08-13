@@ -67,7 +67,7 @@ cd "$BUILD_DIR"
   --disable-avdevice \
   --disable-postproc \
   --disable-swscale-alpha \
-  --disable-videotoolbox \
+  --enable-videotoolbox \
   --enable-network \
   --enable-protocol=rtp \
   --enable-protocol=rtsp \

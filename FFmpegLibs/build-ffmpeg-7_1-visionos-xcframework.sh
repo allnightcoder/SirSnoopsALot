@@ -5,7 +5,7 @@ set -e
 # Enforce using the correct Xcode
 #######################################
 # If needed, force Xcode selection:
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+# sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
 #######################################
 # Paths to built libraries

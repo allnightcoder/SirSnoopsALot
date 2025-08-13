@@ -237,6 +237,11 @@ class RTSPStreamManager: ObservableObject {
             print("RTSPStreamManager - Failed avcodec_parameters_to_context in default open")
             return
         }
+        // Soft-enable VideoToolbox: try to set up hw device; ignore errors and continue in software
+        let vtSetupDefault = ssa_setup_videotoolbox(codecCtx)
+        if vtSetupDefault < 0 {
+            // Continue with software decode
+        }
         
         let resCodecOpen = avcodec_open2(codecCtx, codec, nil)
         guard resCodecOpen >= 0 else {
@@ -351,6 +356,11 @@ class RTSPStreamManager: ObservableObject {
             codecCtx.pointee.extradata_size = Int32(extraData.count)
         }
         
+        // Soft-enable VideoToolbox
+        let vtSetup = ssa_setup_videotoolbox(codecCtx)
+        if vtSetup < 0 {
+            // Continue with software decode
+        }
         let openCodecRes = avcodec_open2(codecCtx, codec, nil)
         if openCodecRes < 0 {
             print("RTSPStreamManager - ❌ Aggressive open: avcodec_open2 failed: \(av_err2str(openCodecRes))")
@@ -468,7 +478,20 @@ class RTSPStreamManager: ObservableObject {
         }
         let receiveResult = avcodec_receive_frame(codecContext, frame)
         if receiveResult >= 0 {
-            convertFrameToImage(frame)
+            // If we received a hardware frame, transfer to software frame for rendering
+            if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
+                if let swFrame = av_frame_alloc() {
+                    if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
+                        convertFrameToImage(swFrame)
+                    } else {
+                        // Failed to transfer, skip rendering this frame
+                    }
+                    var tmp: UnsafeMutablePointer<AVFrame>? = swFrame
+                    av_frame_free(&tmp)
+                }
+            } else {
+                convertFrameToImage(frame)
+            }
         } else if receiveResult != AVERROR(EAGAIN) {
             print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
         }
