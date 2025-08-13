@@ -116,12 +116,4 @@ check_status "Failed to merge release branch"
 git push
 check_status "Failed to push to master"
 
-# Optional: Clean up release branch
-read -p "Delete release branch? (y/n) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    git branch -d $BRANCH
-    git push origin --delete $BRANCH
-fi
-
 echo "Release $VERSION completed successfully!"

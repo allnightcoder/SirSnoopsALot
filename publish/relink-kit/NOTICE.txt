@@ -1,0 +1,12 @@
+This relink kit is provided to help users comply with LGPL v2.1+ when using this app with statically linked FFmpeg libraries.
+
+You may:
+- Rebuild FFmpeg with your modifications.
+- Re-link this app’s object code with your modified FFmpeg to produce a functionally equivalent binary.
+
+You are responsible for:
+- Supplying FFmpeg source code corresponding to your modifications (if you redistribute binaries).
+- Respecting Apple’s platform policies (e.g., code signing, distribution).
+
+This kit is intended solely to enable relinkability under the LGPL and does not grant rights beyond those provided by the relevant licenses. See the top-level ATTRIBUTIONS.md and the included license texts for details.
+

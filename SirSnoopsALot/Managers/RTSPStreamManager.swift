@@ -330,6 +330,8 @@ class RTSPStreamManager: ObservableObject {
             print("RTSPStreamManager - ❌ Aggressive open: avcodec_alloc_context3 failed")
             return
         }
+        // examine memory first, dont just use guard.
+        // rewrite RTSPStreamManager in objc.  
         
         // Manually set known parameters
         codecCtx.pointee.codec_id = wantedCodecID

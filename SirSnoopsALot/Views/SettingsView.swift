@@ -10,6 +10,11 @@ struct SettingsView: View {
             Form {
                 Toggle("Tasteful Red Border", isOn: $showCameraFeedBorder)
                 Toggle("Floating Window Controls", isOn: $showFloatingControls)
+                Section {
+                    NavigationLink("Licenses") {
+                        LicensesView()
+                    }
+                }
             }
             .navigationTitle("Settings")
             .toolbar {
