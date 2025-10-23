@@ -5,9 +5,7 @@ struct ImportFromFrigateView: View {
     @StateObject private var importer = FrigateImporter()
 
     // Connection settings
-    @State private var frigateHost: String = ""
-    @State private var frigatePort: String = "5000"
-    @State private var useHTTPS: Bool = false
+    @State private var frigateUrl: String = ""
 
     // Authentication (optional)
     @State private var username: String = ""
@@ -56,26 +54,16 @@ struct ImportFromFrigateView: View {
     private var connectionFormView: some View {
         Form {
             Section {
-                TextField("Frigate Host", text: $frigateHost)
+                TextField("Frigate URL", text: $frigateUrl)
                     .textContentType(.URL)
                     .autocapitalization(.none)
                     .disableAutocorrection(true)
                     .submitLabel(.done)
-
-                HStack {
-                    Text("Port")
-                    Spacer()
-                    TextField("Port", text: $frigatePort)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 100)
-                }
-
-                Toggle("Use HTTPS", isOn: $useHTTPS)
+                    .keyboardType(.URL)
             } header: {
-                Text("Frigate Server Settings")
+                Text("Frigate Server")
             } footer: {
-                Text("Enter your Frigate NVR server address (e.g., 192.168.1.100)")
+                Text("Enter your Frigate server URL (e.g., http://192.168.1.100:5000, https://frigate.example.com)")
             }
 
             Section {
@@ -130,7 +118,7 @@ struct ImportFromFrigateView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .disabled(frigateHost.isEmpty || importer.isLoading)
+                .disabled(frigateUrl.isEmpty || importer.isLoading)
             }
         }
     }
@@ -250,14 +238,15 @@ struct ImportFromFrigateView: View {
     // MARK: - Actions
 
     private func connectToFrigate() {
-        guard let port = Int(frigatePort) else {
-            importer.errorMessage = "Invalid port number"
+        // Parse the Frigate URL
+        guard let (host, port, useHTTPS) = parseFrigateUrl(frigateUrl) else {
+            importer.errorMessage = "Invalid Frigate URL. Please enter a valid URL like http://192.168.1.100:5000 or https://frigate.example.com"
             return
         }
 
         Task {
             await importer.fetchCameras(
-                host: frigateHost,
+                host: host,
                 port: port,
                 useHTTPS: useHTTPS,
                 username: username.isEmpty ? nil : username,
@@ -279,6 +268,35 @@ struct ImportFromFrigateView: View {
     }
 
     // MARK: - Utility Functions
+
+    /// Parses a Frigate URL and extracts host, port, and protocol
+    /// - Parameter urlString: URL entered by user (e.g., "http://192.168.1.100:5000", "https://frigate.example.com")
+    /// - Returns: Tuple of (host, port, useHTTPS) or nil if invalid
+    private func parseFrigateUrl(_ urlString: String) -> (host: String, port: Int, useHTTPS: Bool)? {
+        var urlToParse = urlString.trimmingCharacters(in: .whitespaces)
+
+        // Handle missing protocol - default to http
+        if !urlToParse.contains("://") {
+            urlToParse = "http://\(urlToParse)"
+        }
+
+        guard let url = URL(string: urlToParse) else {
+            return nil
+        }
+
+        // Extract protocol
+        let useHTTPS = url.scheme?.lowercased() == "https"
+
+        // Extract host
+        guard let host = url.host, !host.isEmpty else {
+            return nil
+        }
+
+        // Extract port (default to 5000 for Frigate if not specified)
+        let port = url.port ?? 5000
+
+        return (host, port, useHTTPS)
+    }
 
     /// Obfuscates credentials in RTSP URLs for display
     private func obfuscateUrl(_ urlString: String) -> String {
