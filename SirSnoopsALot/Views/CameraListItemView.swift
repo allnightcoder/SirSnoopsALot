@@ -1,4 +1,3 @@
-import SwiftUICore
 import SwiftUI
 import UniformTypeIdentifiers
 

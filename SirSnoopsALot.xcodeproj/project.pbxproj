@@ -11,6 +11,7 @@
 		13E708B42D3F1C8D004283E8 /* libbz2.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B32D3F1C8D004283E8 /* libbz2.tbd */; };
 		13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B52D3F1D13004283E8 /* libz.tbd */; };
 		13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B72D3F1D1D004283E8 /* libiconv.tbd */; };
+		13FFAA022D5A0B1200AABBCC /* FFmpegHWAccel.c in Sources */ = {isa = PBXBuildFile; fileRef = 13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,6 +36,7 @@
 		13E708B32D3F1C8D004283E8 /* libbz2.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libbz2.tbd; path = usr/lib/libbz2.tbd; sourceTree = SDKROOT; };
 		13E708B52D3F1D13004283E8 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		13E708B72D3F1D1D004283E8 /* libiconv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libiconv.tbd; path = usr/lib/libiconv.tbd; sourceTree = SDKROOT; };
+		13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FFmpegHWAccel.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -98,9 +100,18 @@
 			path = FFmpegLibs;
 			sourceTree = "<group>";
 		};
+		13FFAA032D5A0B1200AABBCC /* BridgingHeaders */ = {
+			isa = PBXGroup;
+			children = (
+				13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */,
+			);
+			path = BridgingHeaders;
+			sourceTree = "<group>";
+		};
 		13E706C02D3EE125004283E8 = {
 			isa = PBXGroup;
 			children = (
+				13FFAA032D5A0B1200AABBCC /* BridgingHeaders */,
 				13291E7E2D42B9CD00EEE279 /* FFmpegLibs */,
 				13E706CB2D3EE125004283E8 /* SirSnoopsALot */,
 				13E706CC2D3EE125004283E8 /* Packages */,
@@ -249,6 +260,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				13FFAA022D5A0B1200AABBCC /* FFmpegHWAccel.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
