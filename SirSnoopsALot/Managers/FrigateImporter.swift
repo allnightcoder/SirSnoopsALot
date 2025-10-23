@@ -40,6 +40,118 @@ struct FrigateImportResult {
     }
 }
 
+/// Represents a specific Frigate connection scenario (protocol, port, auth)
+private struct FrigateScenario {
+    let name: String
+    let useHTTPS: Bool
+    let port: Int
+    let authMethod: FrigateAuthMethod
+    let requiresCredentials: Bool
+}
+
+/// HARDCODED FRIGATE SCENARIOS - TRY IN EXACT ORDER
+/// These represent the 6 most common Frigate deployment scenarios
+private let FRIGATE_SCENARIOS: [FrigateScenario] = [
+    // Scenario #1: Default Local Frigate (most common)
+    FrigateScenario(
+        name: "#1 Default Local (HTTP:5000, no auth)",
+        useHTTPS: false,
+        port: 5000,
+        authMethod: .none,
+        requiresCredentials: false
+    ),
+
+    // Scenario #2: Frigate with JWT Authentication Enabled
+    FrigateScenario(
+        name: "#2 Frigate JWT (HTTP:5000, JWT)",
+        useHTTPS: false,
+        port: 5000,
+        authMethod: .jwt,
+        requiresCredentials: true
+    ),
+
+    // Scenario #3: HTTPS Reverse Proxy (No Auth)
+    FrigateScenario(
+        name: "#3 HTTPS Proxy (HTTPS:443, no auth)",
+        useHTTPS: true,
+        port: 443,
+        authMethod: .none,
+        requiresCredentials: false
+    ),
+
+    // Scenario #4: HTTPS Reverse Proxy + Frigate JWT
+    FrigateScenario(
+        name: "#4 HTTPS Proxy + JWT (HTTPS:443, JWT)",
+        useHTTPS: true,
+        port: 443,
+        authMethod: .jwt,
+        requiresCredentials: true
+    ),
+
+    // Scenario #5: HTTPS Reverse Proxy + Basic Auth
+    FrigateScenario(
+        name: "#5 HTTPS Proxy + Basic Auth (HTTPS:443, Basic)",
+        useHTTPS: true,
+        port: 443,
+        authMethod: .basicAuth,
+        requiresCredentials: true
+    ),
+
+    // Scenario #6a: HTTP Reverse Proxy (Non-Standard Port) - 8080 + JWT
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8080 + JWT",
+        useHTTPS: false,
+        port: 8080,
+        authMethod: .jwt,
+        requiresCredentials: true
+    ),
+
+    // Scenario #6b: HTTP Reverse Proxy 8080 + Basic Auth
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8080 + Basic Auth",
+        useHTTPS: false,
+        port: 8080,
+        authMethod: .basicAuth,
+        requiresCredentials: true
+    ),
+
+    // Scenario #6c: HTTP Reverse Proxy 8080 + No Auth
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8080 (no auth)",
+        useHTTPS: false,
+        port: 8080,
+        authMethod: .none,
+        requiresCredentials: false
+    ),
+
+    // Scenario #6d: HTTP Reverse Proxy (Home Assistant port 8123) + JWT
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8123 + JWT",
+        useHTTPS: false,
+        port: 8123,
+        authMethod: .jwt,
+        requiresCredentials: true
+    ),
+
+    // Scenario #6e: HTTP Reverse Proxy 8123 + Basic Auth
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8123 + Basic Auth",
+        useHTTPS: false,
+        port: 8123,
+        authMethod: .basicAuth,
+        requiresCredentials: true
+    ),
+
+    // Scenario #6f: HTTP Reverse Proxy 8123 + No Auth
+    FrigateScenario(
+        name: "#6 HTTP Proxy 8123 (no auth)",
+        useHTTPS: false,
+        port: 8123,
+        authMethod: .none,
+        requiresCredentials: false
+    ),
+]
+
 @MainActor
 class FrigateImporter: ObservableObject {
     @Published var isLoading = false
@@ -51,13 +163,13 @@ class FrigateImporter: ObservableObject {
     /// Connects to Frigate NVR and fetches camera configurations
     /// - Parameters:
     ///   - host: Frigate server hostname or IP address
-    ///   - port: Frigate API port (default: 5000)
-    ///   - useHTTPS: Whether to use HTTPS instead of HTTP
-    ///   - username: Optional username for HTTP Basic Authentication
-    ///   - password: Optional password for HTTP Basic Authentication
+    ///   - port: Optional explicit port (nil = auto-detect)
+    ///   - useHTTPS: Optional explicit protocol (nil = auto-detect)
+    ///   - username: Optional username for authentication
+    ///   - password: Optional password for authentication
     ///   - go2rtcPublicUrl: Optional public go2rtc base URL (e.g., rtsp://frigate.example.com:8554)
     ///   - ignoreSSLErrors: Whether to ignore SSL certificate validation errors (for self-signed certificates)
-    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil, go2rtcPublicUrl: String? = nil, ignoreSSLErrors: Bool = false) async {
+    func fetchCameras(host: String, port: Int? = nil, useHTTPS: Bool? = nil, username: String? = nil, password: String? = nil, go2rtcPublicUrl: String? = nil, ignoreSSLErrors: Bool = false) async {
         guard !host.isEmpty else {
             errorMessage = "Please enter a Frigate host address"
             return
@@ -67,47 +179,71 @@ class FrigateImporter: ObservableObject {
         errorMessage = nil
         discoveredCameras = []
 
-        // Build Frigate API URL
-        let scheme = useHTTPS ? "https" : "http"
-        guard let url = URL(string: "\(scheme)://\(host):\(port)/api/config") else {
-            errorMessage = "Invalid Frigate server URL"
-            isLoading = false
-            return
-        }
+        let hasCredentials = username != nil && password != nil
 
-        logger.info("Fetching Frigate config from: \(url.absoluteString)")
+        // Determine which scenarios to try
+        var scenariosToTry: [FrigateScenario]
 
-        // Determine which auth methods to try
-        var authMethodsToTry = determineAuthAttemptOrder(port: port)
+        if let explicitPort = port, let explicitHTTPS = useHTTPS {
+            // BOTH protocol AND port specified - ONLY try that exact combo
+            logger.info("User specified explicit protocol:port (\(explicitHTTPS ? "https" : "http"):\(explicitPort)) - trying only that combination")
+            scenariosToTry = createExplicitScenarios(useHTTPS: explicitHTTPS, port: explicitPort, hasCredentials: hasCredentials)
 
-        // If no credentials provided, only try .none
-        if username == nil || password == nil {
-            authMethodsToTry = [.none]
+        } else if port != nil || useHTTPS != nil {
+            // At least ONE value is explicit - filter hardcoded scenarios
+            logger.info("User specified explicit \(useHTTPS != nil ? "protocol" : "port") - filtering scenarios")
+
+            scenariosToTry = FRIGATE_SCENARIOS.filter { scenario in
+                let matchesPort = port == nil || scenario.port == port
+                let matchesProtocol = useHTTPS == nil || scenario.useHTTPS == useHTTPS
+                // If user provided credentials, ONLY try auth scenarios. If no credentials, ONLY try no-auth scenarios.
+                let matchesCredentials = scenario.requiresCredentials == hasCredentials
+                return matchesPort && matchesProtocol && matchesCredentials
+            }
+
+            // If filtered list is empty (e.g., user specified weird port not in hardcoded list),
+            // create explicit scenarios for that combo
+            if scenariosToTry.isEmpty {
+                logger.info("No hardcoded scenarios match, creating explicit scenarios")
+                scenariosToTry = createExplicitScenarios(
+                    useHTTPS: useHTTPS ?? false,
+                    port: port ?? 5000,
+                    hasCredentials: hasCredentials
+                )
+            }
+
         } else {
-            // Check if we have a cached successful method for this host
-            if let cachedMethod = getCachedAuthMethod(for: host) {
-                // Try cached method first, but keep others as fallback
-                authMethodsToTry.removeAll { $0 == cachedMethod }
-                authMethodsToTry.insert(cachedMethod, at: 0)
-                logger.info("Using cached auth method: \(cachedMethod.rawValue)")
+            // Neither explicit - try ALL hardcoded scenarios in order
+            logger.info("Auto-detecting Frigate configuration - trying all common scenarios")
+            scenariosToTry = FRIGATE_SCENARIOS.filter { scenario in
+                // If user provided credentials, ONLY try auth scenarios. If no credentials, ONLY try no-auth scenarios.
+                scenario.requiresCredentials == hasCredentials
             }
         }
 
-        // Try each auth method until one succeeds
-        var lastError: Error?
-        var lastStatusCode: Int?
+        logger.info("Will try \(scenariosToTry.count) scenarios")
 
-        for authMethod in authMethodsToTry {
-            logger.debug("Trying auth method: \(authMethod.rawValue)")
+        // Try each scenario in order until one succeeds
+        var lastError: Error?
+
+        for scenario in scenariosToTry {
+            logger.info("Trying: \(scenario.name)")
+
+            // Build URL for this scenario
+            let scheme = scenario.useHTTPS ? "https" : "http"
+            guard let url = URL(string: "\(scheme)://\(host):\(scenario.port)/api/config") else {
+                logger.error("Invalid URL for scenario: \(scenario.name)")
+                continue
+            }
 
             do {
-                // Attempt to fetch config with this auth method
+                // Attempt to fetch config with this scenario's auth method
                 let (data, _) = try await attemptFetchWithAuth(
                     url: url,
-                    authMethod: authMethod,
+                    authMethod: scenario.authMethod,
                     host: host,
-                    port: port,
-                    useHTTPS: useHTTPS,
+                    port: scenario.port,
+                    useHTTPS: scenario.useHTTPS,
                     username: username ?? "",
                     password: password ?? "",
                     ignoreSSLErrors: ignoreSSLErrors
@@ -122,11 +258,11 @@ class FrigateImporter: ObservableObject {
                     errorMessage = "No cameras found in Frigate configuration"
                 } else {
                     discoveredCameras = cameras
-                    logger.info("Successfully discovered \(cameras.count) cameras using \(authMethod.rawValue)")
+                    logger.info("✅ SUCCESS with \(scenario.name) - discovered \(cameras.count) cameras")
 
-                    // Cache this successful auth method
-                    if username != nil && password != nil {
-                        cacheAuthMethod(authMethod, for: host)
+                    // Cache this successful scenario for next time
+                    if hasCredentials {
+                        cacheAuthMethod(scenario.authMethod, for: host)
                     }
                 }
 
@@ -135,40 +271,49 @@ class FrigateImporter: ObservableObject {
 
             } catch let error as FrigateError {
                 if case .httpError(let code) = error {
-                    lastStatusCode = code
-                    // 401/403 means auth failed, try next method
+                    // 401/403 means auth failed, try next scenario
                     if code == 401 || code == 403 {
-                        logger.debug("Auth method \(authMethod.rawValue) failed with \(code), trying next method")
+                        logger.debug("❌ \(scenario.name) failed with \(code), trying next scenario")
+                        lastError = error
+                        continue
+                    } else if code == 404 {
+                        // 404 likely means wrong port or path, try next scenario
+                        logger.debug("❌ \(scenario.name) failed with 404 (not found), trying next scenario")
+                        lastError = error
+                        continue
+                    } else if code >= 500 {
+                        // Server error, might work with different scenario
+                        logger.debug("❌ \(scenario.name) failed with \(code) (server error), trying next scenario")
                         lastError = error
                         continue
                     } else {
-                        // Other HTTP errors (404, 500, etc.) - fail immediately
-                        errorMessage = error.localizedDescription
-                        logger.error("Request failed with HTTP \(code): \(error.localizedDescription)")
-                        isLoading = false
-                        return
+                        // Other HTTP errors
+                        logger.debug("❌ \(scenario.name) failed with HTTP \(code)")
+                        lastError = error
+                        continue
                     }
                 } else {
                     // Non-HTTP errors (network, invalid response, etc.)
+                    logger.debug("❌ \(scenario.name) failed: \(error.localizedDescription)")
                     lastError = error
-                    logger.error("Request failed: \(error.localizedDescription)")
+                    continue
                 }
             } catch {
-                // Other errors (JSON decode, etc.)
+                // Other errors (JSON decode, network timeout, etc.)
+                logger.debug("❌ \(scenario.name) failed: \(error.localizedDescription)")
                 lastError = error
-                logger.error("Unexpected error: \(error.localizedDescription)")
+                continue
             }
         }
 
-        // All auth methods failed
-        if let statusCode = lastStatusCode, (statusCode == 401 || statusCode == 403) {
-            // Clear cached method if it exists
-            clearCachedAuthMethod(for: host)
-            errorMessage = "Authentication failed. Please check your username and password."
-        } else if let error = lastError {
-            errorMessage = "Failed to connect: \(error.localizedDescription)"
+        // All scenarios failed
+        logger.error("All scenarios failed")
+        clearCachedAuthMethod(for: host)
+
+        if let error = lastError {
+            errorMessage = "Could not connect to Frigate using any common configuration. Last error: \(error.localizedDescription)"
         } else {
-            errorMessage = "Failed to connect to Frigate server"
+            errorMessage = "Could not connect to Frigate server. Please verify the hostname and try specifying the full URL (e.g., https://frigate.example.com:443)"
         }
 
         isLoading = false
@@ -216,6 +361,29 @@ class FrigateImporter: ObservableObject {
     }
 
     // MARK: - Private Methods
+
+    /// Creates scenarios for an explicit protocol:port combination
+    /// - Parameters:
+    ///   - useHTTPS: Whether to use HTTPS
+    ///   - port: Port number
+    ///   - hasCredentials: Whether credentials are available
+    /// - Returns: Array of scenarios with all applicable auth methods for that combo
+    private func createExplicitScenarios(useHTTPS: Bool, port: Int, hasCredentials: Bool) -> [FrigateScenario] {
+        let protocolName = useHTTPS ? "https" : "http"
+
+        if hasCredentials {
+            // User provided credentials - ONLY try auth methods (JWT and Basic Auth)
+            return [
+                FrigateScenario(name: "Explicit \(protocolName):\(port) (JWT)", useHTTPS: useHTTPS, port: port, authMethod: .jwt, requiresCredentials: true),
+                FrigateScenario(name: "Explicit \(protocolName):\(port) (Basic Auth)", useHTTPS: useHTTPS, port: port, authMethod: .basicAuth, requiresCredentials: true),
+            ]
+        } else {
+            // No credentials - only try no-auth
+            return [
+                FrigateScenario(name: "Explicit \(protocolName):\(port) (No Auth)", useHTTPS: useHTTPS, port: port, authMethod: .none, requiresCredentials: false)
+            ]
+        }
+    }
 
     /// Attempts to login to Frigate and obtain a JWT token
     /// - Parameters:
@@ -366,26 +534,6 @@ class FrigateImporter: ObservableObject {
         }
 
         return (data, statusCode)
-    }
-
-    /// Determines the authentication attempt order based on port and context
-    /// - Parameter port: The Frigate API port
-    /// - Returns: Array of auth methods to try in order
-    private func determineAuthAttemptOrder(port: Int) -> [FrigateAuthMethod] {
-        switch port {
-        case 5000:
-            // Port 5000 is Frigate's unauthenticated internal port
-            // JWT login endpoint doesn't exist here
-            return [.none, .basicAuth]
-        case 8971:
-            // Port 8971 is Frigate's authenticated port
-            // JWT is the native method
-            return [.jwt, .none]
-        default:
-            // Other ports (443, 80, custom) = reverse proxy
-            // Try JWT first (Frigate's preferred), then Basic Auth (proxy), then none
-            return [.jwt, .basicAuth, .none]
-        }
     }
 
     /// Gets the cached authentication method for a host

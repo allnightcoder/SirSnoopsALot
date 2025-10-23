@@ -289,8 +289,8 @@ struct ImportFromFrigateView: View {
 
     private func connectToFrigate() {
         // Parse the Frigate URL
-        guard let (host, port, useHTTPS) = parseFrigateUrl(frigateUrl) else {
-            importer.errorMessage = "Invalid Frigate URL. Please enter a valid URL like http://192.168.1.100:5000 or https://frigate.example.com"
+        guard let (host, explicitPort, explicitHTTPS) = parseFrigateUrl(frigateUrl) else {
+            importer.errorMessage = "Invalid Frigate URL. Please enter a hostname or URL like 'frigate.example.com' or 'http://192.168.1.100:5000'"
             return
         }
 
@@ -298,10 +298,11 @@ struct ImportFromFrigateView: View {
         saveSettings()
 
         Task {
+            // Pass explicit port/protocol if specified, nil for auto-detect
             await importer.fetchCameras(
                 host: host,
-                port: port,
-                useHTTPS: useHTTPS,
+                port: explicitPort,
+                useHTTPS: explicitHTTPS,
                 username: username.isEmpty ? nil : username,
                 password: password.isEmpty ? nil : password,
                 go2rtcPublicUrl: go2rtcPublicUrl.isEmpty ? nil : go2rtcPublicUrl,
@@ -323,41 +324,46 @@ struct ImportFromFrigateView: View {
 
     // MARK: - Utility Functions
 
-    /// Parses a Frigate URL and extracts host, port, and protocol
-    /// - Parameter urlString: URL entered by user (e.g., "http://192.168.1.100:5000", "https://frigate.example.com")
-    /// - Returns: Tuple of (host, port, useHTTPS) or nil if invalid
-    private func parseFrigateUrl(_ urlString: String) -> (host: String, port: Int, useHTTPS: Bool)? {
-        var urlToParse = urlString.trimmingCharacters(in: .whitespaces)
+    /// Parses a Frigate URL and extracts host with optional explicit port/protocol
+    /// - Parameter urlString: URL entered by user (e.g., "frigate.example.com", "http://192.168.1.100:5000", "https://frigate.example.com")
+    /// - Returns: Tuple of (host, explicitPort, explicitHTTPS) or nil if invalid
+    ///   - host: The hostname or IP address
+    ///   - explicitPort: Port number if user specified it, nil for auto-detect
+    ///   - explicitHTTPS: true/false if user specified protocol, nil for auto-detect
+    private func parseFrigateUrl(_ urlString: String) -> (host: String, explicitPort: Int?, explicitHTTPS: Bool?)? {
+        let trimmed = urlString.trimmingCharacters(in: .whitespaces)
 
-        // Handle missing protocol - default to http
-        if !urlToParse.contains("://") {
-            urlToParse = "http://\(urlToParse)"
+        // Check if user explicitly specified protocol
+        let hadProtocol = trimmed.contains("://")
+
+        // Prepare URL for parsing
+        var urlToParse = trimmed
+        if !hadProtocol {
+            // Add temporary protocol for parsing (will not use it)
+            urlToParse = "http://\(trimmed)"
         }
 
         guard let url = URL(string: urlToParse) else {
             return nil
         }
 
-        // Extract protocol
-        let useHTTPS = url.scheme?.lowercased() == "https"
-
         // Extract host
         guard let host = url.host, !host.isEmpty else {
             return nil
         }
 
-        // Extract port with protocol-aware defaults
-        // HTTPS defaults to 443 (standard reverse proxy)
-        // HTTP defaults to 5000 (Frigate's default)
-        // Explicit port always takes precedence
-        let port: Int
-        if let explicitPort = url.port {
-            port = explicitPort
+        // Extract explicit protocol (only if user specified it)
+        let explicitHTTPS: Bool?
+        if hadProtocol {
+            explicitHTTPS = url.scheme?.lowercased() == "https"
         } else {
-            port = useHTTPS ? 443 : 5000
+            explicitHTTPS = nil  // Auto-detect
         }
 
-        return (host, port, useHTTPS)
+        // Extract explicit port (only if user specified it)
+        let explicitPort = url.port  // nil if not specified
+
+        return (host, explicitPort, explicitHTTPS)
     }
 
     /// Obfuscates credentials in RTSP URLs for display
