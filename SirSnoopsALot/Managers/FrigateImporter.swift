@@ -55,7 +55,8 @@ class FrigateImporter: ObservableObject {
     ///   - useHTTPS: Whether to use HTTPS instead of HTTP
     ///   - username: Optional username for HTTP Basic Authentication
     ///   - password: Optional password for HTTP Basic Authentication
-    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil) async {
+    ///   - go2rtcPublicUrl: Optional public go2rtc base URL (e.g., rtsp://frigate.example.com:8554)
+    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil, go2rtcPublicUrl: String? = nil) async {
         guard !host.isEmpty else {
             errorMessage = "Please enter a Frigate host address"
             return
@@ -107,7 +108,7 @@ class FrigateImporter: ObservableObject {
             let frigateConfig = try decoder.decode(FrigateConfig.self, from: data)
 
             // Parse cameras
-            let cameras = parseFrigateConfig(frigateConfig)
+            let cameras = parseFrigateConfig(frigateConfig, go2rtcPublicUrl: go2rtcPublicUrl)
 
             if cameras.isEmpty {
                 errorMessage = "No cameras found in Frigate configuration"
@@ -171,7 +172,7 @@ class FrigateImporter: ObservableObject {
     // MARK: - Private Methods
 
     /// Parses Frigate configuration and extracts importable cameras
-    private func parseFrigateConfig(_ config: FrigateConfig) -> [FrigateCameraImportable] {
+    private func parseFrigateConfig(_ config: FrigateConfig, go2rtcPublicUrl: String?) -> [FrigateCameraImportable] {
         var cameras: [FrigateCameraImportable] = []
 
         for (key, frigateCamera) in config.cameras {
@@ -184,8 +185,12 @@ class FrigateImporter: ObservableObject {
             // Extract camera name (use key if name is not provided)
             let displayName = frigateCamera.name ?? key.replacingOccurrences(of: "_", with: " ").capitalized
 
-            // Parse RTSP streams
-            let (mainStream, subStream) = extractStreams(from: frigateCamera.ffmpeg.inputs)
+            // Parse RTSP streams with smart go2rtc/camera URL extraction
+            let (mainStream, subStream) = extractStreams(
+                from: frigateCamera.ffmpeg.inputs,
+                go2rtcStreams: config.go2rtc?.streams,
+                go2rtcPublicUrl: go2rtcPublicUrl
+            )
 
             // Create importable camera
             let importable = FrigateCameraImportable(
@@ -221,43 +226,96 @@ class FrigateImporter: ObservableObject {
         return false
     }
 
-    /// Extracts main (HD) and sub (SD) streams from Frigate inputs
-    /// - Parameter inputs: Array of Frigate input configurations
+    /// Extracts main (HD) and sub (SD) streams from Frigate inputs with smart go2rtc/camera URL resolution
+    /// - Parameters:
+    ///   - inputs: Array of Frigate input configurations
+    ///   - go2rtcStreams: Optional go2rtc stream definitions
+    ///   - go2rtcPublicUrl: Optional public go2rtc base URL for restream access
     /// - Returns: Tuple of (mainStreamUrl, subStreamUrl)
-    private func extractStreams(from inputs: [FrigateInput]) -> (String?, String?) {
+    private func extractStreams(from inputs: [FrigateInput], go2rtcStreams: [String: [String]]?, go2rtcPublicUrl: String?) -> (String?, String?) {
         var mainStream: String?
         var subStream: String?
 
-        // Strategy: Find streams based on their roles
-        // Main/HD: First stream with "detect" or "record" role
-        // Sub/SD: First stream with "clips" role OR second stream
+        // Strategy:
+        // 1. Find inputs by role (record = HD, detect = SD)
+        // 2. For each input, resolve to actual RTSP URL:
+        //    a. If user provided go2rtc public URL AND input uses go2rtc proxy -> use public go2rtc URL
+        //    b. Else if go2rtc streams available -> extract actual camera URL from go2rtc.streams
+        //    c. Else -> use input path directly (direct camera URL)
 
         for input in inputs {
             let roles = input.roles.map { $0.lowercased() }
 
-            // Main stream priority: detect > record
-            if mainStream == nil && (roles.contains("detect") || roles.contains("record")) {
-                mainStream = input.path
+            // Resolve the actual URL for this input
+            let resolvedUrl = resolveStreamUrl(
+                inputPath: input.path,
+                go2rtcStreams: go2rtcStreams,
+                go2rtcPublicUrl: go2rtcPublicUrl
+            )
+
+            // Main stream priority: record > detect
+            if mainStream == nil && roles.contains("record") {
+                mainStream = resolvedUrl
                 continue
             }
 
-            // Sub stream: clips role or any other stream
-            if subStream == nil && roles.contains("clips") {
-                subStream = input.path
+            // Sub stream: detect role
+            if subStream == nil && roles.contains("detect") {
+                subStream = resolvedUrl
                 continue
             }
         }
 
-        // Fallback: If we have multiple inputs but didn't find clear roles
+        // Fallback: If we didn't find role-based streams, use first input for both
         if mainStream == nil && !inputs.isEmpty {
-            mainStream = inputs[0].path
-        }
-
-        if subStream == nil && inputs.count > 1 {
-            subStream = inputs[1].path
+            mainStream = resolveStreamUrl(
+                inputPath: inputs[0].path,
+                go2rtcStreams: go2rtcStreams,
+                go2rtcPublicUrl: go2rtcPublicUrl
+            )
+            subStream = mainStream // Use same stream for both if only one available
         }
 
         return (mainStream, subStream)
+    }
+
+    /// Resolves an input path to an actual RTSP URL with go2rtc support
+    /// - Parameters:
+    ///   - inputPath: The path from ffmpeg.inputs (may be go2rtc proxy or direct camera URL)
+    ///   - go2rtcStreams: Optional go2rtc stream definitions
+    ///   - go2rtcPublicUrl: Optional public go2rtc base URL
+    /// - Returns: Resolved RTSP URL
+    private func resolveStreamUrl(inputPath: String, go2rtcStreams: [String: [String]]?, go2rtcPublicUrl: String?) -> String? {
+        // Check if this is a go2rtc proxy URL (rtsp://127.0.0.1:8554/...)
+        if inputPath.starts(with: "rtsp://127.0.0.1:8554/") {
+            // Extract stream name from proxy URL
+            let streamName = inputPath.replacingOccurrences(of: "rtsp://127.0.0.1:8554/", with: "")
+
+            // Priority 1: Use public go2rtc URL if provided
+            if let publicUrl = go2rtcPublicUrl, !publicUrl.isEmpty {
+                let publicStreamUrl = "\(publicUrl)/\(streamName)"
+                logger.debug("Using go2rtc public URL: \(publicStreamUrl)")
+                return publicStreamUrl
+            }
+
+            // Priority 2: Look up actual camera URL in go2rtc.streams
+            if let streams = go2rtcStreams, let streamSources = streams[streamName] {
+                // Find the first RTSP URL in the sources (ignore ffmpeg: entries)
+                for source in streamSources {
+                    if source.starts(with: "rtsp://") || source.starts(with: "rtsps://") {
+                        logger.debug("Using camera URL from go2rtc.streams: \(source)")
+                        return source
+                    }
+                }
+            }
+
+            // Fallback: Use the 127.0.0.1 URL as-is (won't work remotely, but better than nothing)
+            logger.warning("go2rtc stream '\(streamName)' not found in config, using local URL: \(inputPath)")
+            return inputPath
+        }
+
+        // Direct camera URL (already usable)
+        return inputPath
     }
 }
 

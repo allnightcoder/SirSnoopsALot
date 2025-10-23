@@ -5,6 +5,23 @@ import Foundation
 /// Root configuration object from Frigate API
 struct FrigateConfig: Codable {
     let cameras: [String: FrigateCamera]
+    let go2rtc: FrigateGo2RTC?
+
+    enum CodingKeys: String, CodingKey {
+        case cameras
+        case go2rtc
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.cameras = try container.decode([String: FrigateCamera].self, forKey: .cameras)
+        self.go2rtc = try? container.decodeIfPresent(FrigateGo2RTC.self, forKey: .go2rtc)
+    }
+}
+
+/// go2rtc configuration containing stream definitions
+struct FrigateGo2RTC: Codable {
+    let streams: [String: [String]]?
 }
 
 /// Individual camera configuration from Frigate

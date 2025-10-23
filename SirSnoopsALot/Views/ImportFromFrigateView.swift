@@ -14,6 +14,10 @@ struct ImportFromFrigateView: View {
     @State private var password: String = ""
     @State private var showAuthSection: Bool = false
 
+    // go2rtc settings (optional)
+    @State private var go2rtcPublicUrl: String = ""
+    @State private var showGo2rtcSection: Bool = false
+
     // UI state
     @State private var showCameraList: Bool = false
     @State private var showImportResult: Bool = false
@@ -86,6 +90,18 @@ struct ImportFromFrigateView: View {
                 }
             } footer: {
                 Text("Required for Frigate instances with authentication enabled")
+            }
+
+            Section {
+                DisclosureGroup("go2rtc Public URL (Optional)", isExpanded: $showGo2rtcSection) {
+                    TextField("Public go2rtc base URL", text: $go2rtcPublicUrl)
+                        .textContentType(.URL)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                        .submitLabel(.done)
+                }
+            } footer: {
+                Text("If using go2rtc restreams, enter the public URL (e.g., rtsp://frigate.example.com:8554). This replaces 127.0.0.1:8554 for remote access.")
             }
 
             if let errorMessage = importer.errorMessage {
@@ -245,7 +261,8 @@ struct ImportFromFrigateView: View {
                 port: port,
                 useHTTPS: useHTTPS,
                 username: username.isEmpty ? nil : username,
-                password: password.isEmpty ? nil : password
+                password: password.isEmpty ? nil : password,
+                go2rtcPublicUrl: go2rtcPublicUrl.isEmpty ? nil : go2rtcPublicUrl
             )
 
             // If successful, show camera list
