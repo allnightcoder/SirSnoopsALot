@@ -1,0 +1,116 @@
+ = Frigate Historical Playback Assessment
+
+ == Issue 1 – Play/Pause/Stop Wiring
+
+ === What’s Breaking Today
+
+ * `FrigatePlaybackController.play()` is a no-op, yet `HistoricalFrigateStore.resume()` relies on it to restart playback (`SirSnoopsALot/Playback/FrigatePlaybackController.swift:41`, `SirSnoopsALot/State/HistoricalFrigateStore.swift:108`). A paused stream never resumes because nothing re-enters the FFmpeg loop.
+ * Both `pause()` and `stop()` call `streamManager?.stopStream()`, so “pause” tears down FFmpeg state, clears `currentFrame`, and nulls `currentStreamURL` no differently than “stop” (`FrigatePlaybackController.swift:45-56`). There’s no surviving context to resume.
+ * `HLSAuthStreamManager` only understands “start” and “stop”, tracks activity via an unsynchronised `isRunning` flag, and calls `Thread.sleep` on the caller’s thread during shutdown (`SirSnoopsALot/Managers/HLSAuthStreamManager.swift:68-152`). When invoked from the main actor, this blocks UI for 200 ms per stop.
+ * UI state is optimistic: the store flips `playbackState` to `.paused`/`.playing` without consulting the decoder, so the UI can report “playing” while FFmpeg is idle.
+
+ === Recommended Fix
+
+ Introduce an explicit stream state machine, keep FFmpeg contexts alive while paused, and stop blocking the main actor.
+
+ .Augmented manager interface (conceptual)
+ [source,swift]
+ ----
+ final class HLSAuthStreamManager: ObservableObject {
+     enum StreamState { case idle, preparing, playing, paused, draining, failed(Error) }
+
+     @Published private(set) var state: StreamState = .idle
+     @Published private(set) var currentFrame: UIImage?
+
+     private let stateQueue = DispatchQueue(label: "HLSAuthStreamManager.state", attributes: .concurrent)
+     private let decodeQueue = DispatchQueue(label: "HLSAuthStreamManager.decode", qos: .userInitiated)
+     private let pauseSemaphore = DispatchSemaphore(value: 0)
+     private var paused = false
+
+     func startStream(url: String, authToken: String) { /* existing open logic */ }
+
+     func pauseStream() {
+         updateState(.paused)
+         paused = true
+     }
+
+     func resumeStream() {
+         guard case .paused = state else { return }
+         paused = false
+         pauseSemaphore.signal()
+         updateState(.playing)
+     }
+
+     func stopStream() {
+         updateState(.draining)
+         // flip a running flag atomically, wake the loop, then perform cleanup on decodeQueue.async
+     }
+
+     private func startDecodingLoop() {
+         decodeQueue.async { [weak self] in
+             guard let self else { return }
+             while self.shouldKeepDecoding {
+                 if self.paused {
+                     self.pauseSemaphore.wait()
+                     continue
+                 }
+                 if !self.readNextFrame() { Thread.sleep(forTimeInterval: 0.033) }
+             }
+             self.cleanupResources()
+             self.updateState(.idle)
+         }
+     }
+ }
+ ----
+
+ * Replace the global `isRunning` bool with an atomic `shouldKeepDecoding` check inside the decode queue. Publish state changes on the main queue so the controller and store can reconcile UI.
+ * Make `stopStream()` schedule cleanup on `decodeQueue` rather than sleeping the calling thread. When `readNextFrame()` sees EOF it should transition the state to `.draining` and exit gracefully instead of recursively calling `stopStream()`.
+ * Update the controller to forward pause/resume instead of treating pause as stop:
+
+   - `FrigatePlaybackController.pause()` → `streamManager?.pauseStream()`.
+   - `FrigatePlaybackController.play()` → `streamManager?.resumeStream()` when a manager exists, or start a new stream otherwise.
+   - Subscribe to `streamManager.$state` and only set `currentFrame`/`currentTime` once the state reports `.playing`.
+
+ * In `HistoricalFrigateStore`, derive `playbackState` from the manager’s published state instead of assuming success. For example, map `.preparing` to `.loading`, `.playing` to `.playing(currentTime:)`, `.paused` to `.paused`.
+ * Consider centralising frame-to-time mapping so seeking/pause can freeze the time anchor instead of nulling it on pause.
+
+ === Race & Lifecycle Cleanup
+
+ * Guard shared FFmpeg pointers with one serial decode queue; do not touch them from the main actor after initial creation. That automatically resolves `isRunning` races.
+ * Expose a Combine publisher carrying state or errors so UI can react to underruns or EOF instead of polling booleans.
+ * When releasing resources, nil out `frame`, `packet`, and contexts on the decode queue and emit `.idle` afterwards. That prevents UI from reading stale references during teardown.
+
+ == Issue 2 – Timeline Scrubbing on visionOS
+
+ === Interaction Pattern Research
+
+ * Apple’s “Design hover interactions for visionOS” session outlines how system media controls persist while you look at them and highlights “Look to Scroll” for passive navigation in windowed layouts. Custom playback chrome should mimic those behaviours so scrubbing feels native.citeturn14view0
+ * The WWDC “Explore video experiences for visionOS” session references the `Destination Video` sample, whose docked controls mirror tvOS-style scrubbing when presented in a floating window—good inspiration for state transitions between idle, scrubbing, and playback.citeturn8view0
+ * Community labs demonstrate using `SpatialTapGesture` plus conversion helpers to obtain 3D coordinates when initiating manipulation, then combining that with `DragGesture` to move along a surface.citeturn1search3turn1search4
+
+ === Recommended Timeline Control
+
+ * Gesture pairing:
+ ** Use `SpatialTapGesture(targetedTo: .anyEntity)` (immersive) or a standard `TapGesture` (windowed) to capture the starting scrubbing point and focus the control.
+ ** Chain a `TargetedDragGesture` while the pinch remains down so people can move along the rail; when running in a window, fallback to `DragGesture` driven by the plane of the timeline view.
+ * Location mapping:
+ ** Windowed timeline – use `GeometryReader` to normalise the drag translation: `let t = (location.x - bounds.minX) / bounds.width`; clamp to `[0, 1]` and map onto the selected range.
+ ** Immersive timeline – convert `value.location3D` into the timeline entity’s local space (e.g. `value.convert(value.location3D, from: .local, to: timelineEntity)`) and normalise against the mesh width before updating `currentTime`.citeturn1search4turn15search9
+ * Feedback:
+ ** Keep the scrubber ornament visible while the user looks at or manipulates it, mirroring the persistence behaviour described in the design session.citeturn14view0
+ ** On drag begin, freeze playback and show both a live frame preview (e.g. by asking `FrigatePlaybackController` for key frame seeks) and a formatted timestamp; only commit the seek when the gesture ends.
+ ** Offer Look-to-Scroll for broad navigation when the user is not actively pinching (opt-in on the scroll view that hosts the timeline) so they can coarse seek with gaze and fine seek with pinch/drag.citeturn14view0
+ * Vision-specific considerations:
+ ** Honour hand tracking availability—gate gestures behind `NSHandsTrackingUsageDescription` so controls remain responsive on device.
+ ** In immersive mode, render the timeline as a light-weight ornament or panel attached to the video plane; re-use `RealityView` attachments so scrubbing happens at a comfortable depth.
+
+ === Controller Glue
+
+ * Surface timeline events through the store: expose `scrub(to:)` to update `currentTime` optimistically, then trigger an FFmpeg seek (likely through re-opening the stream around the target window).
+ * Delay UI state transitions during scrub until the decoder reports frames for the requested time to avoid jumping back to old frames.
+
+ == Additional Observations
+
+ * `Thread.sleep` calls inside `stopStream()` block whichever thread invokes stop; replace them with dispatch scheduling so UI interactions remain smooth.
+ * When EOF is hit (`readNextFrame` returns `AVERROR_EOF`), publish a terminal state (e.g. `.ended`) so the store can move to `.idle` instead of leaving “playing” controls up indefinitely.
+ * Consider centralising error handling: wrap FFmpeg failures in custom errors and propagate through the state publisher so UI can present actionable banners instead of generic strings.
