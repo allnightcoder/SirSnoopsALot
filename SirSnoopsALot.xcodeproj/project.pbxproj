@@ -100,14 +100,6 @@
 			path = FFmpegLibs;
 			sourceTree = "<group>";
 		};
-		13FFAA032D5A0B1200AABBCC /* BridgingHeaders */ = {
-			isa = PBXGroup;
-			children = (
-				13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */,
-			);
-			path = BridgingHeaders;
-			sourceTree = "<group>";
-		};
 		13E706C02D3EE125004283E8 = {
 			isa = PBXGroup;
 			children = (
@@ -145,6 +137,14 @@
 				13E708B32D3F1C8D004283E8 /* libbz2.tbd */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		13FFAA032D5A0B1200AABBCC /* BridgingHeaders */ = {
+			isa = PBXGroup;
+			children = (
+				13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */,
+			);
+			path = BridgingHeaders;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -347,13 +347,13 @@
 					"-lswresample",
 					"-lswscale",
 					"-framework",
-					"VideoToolbox",
+					VideoToolbox,
 					"-framework",
-					"CoreMedia",
+					CoreMedia,
 					"-framework",
-					"CoreVideo",
+					CoreVideo,
 					"-framework",
-					"AVFoundation",
+					AVFoundation,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -429,13 +429,13 @@
 					"-lswresample",
 					"-lswscale",
 					"-framework",
-					"VideoToolbox",
+					VideoToolbox,
 					"-framework",
-					"CoreMedia",
+					CoreMedia,
 					"-framework",
-					"CoreVideo",
+					CoreVideo,
 					"-framework",
-					"AVFoundation",
+					AVFoundation,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "net.virtual-chaos.SirSnoopsALot";
 				PRODUCT_NAME = "$(TARGET_NAME)";

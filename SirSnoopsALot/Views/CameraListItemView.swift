@@ -36,14 +36,24 @@ struct CameraListItemView: View {
                         }) {
                             Label("Open in New Window", systemImage: "rectangle.on.rectangle")
                         }
-                        
+
+                        // Show "View History" option for Frigate cameras
+                        if camera.cameraType == .frigate {
+                            Button(action: {
+                                print("CameraListItemView - Opening historical view for Frigate camera: \(camera.name)")
+                                openWindow(id: "historical", value: camera)
+                            }) {
+                                Label("View History", systemImage: "clock.arrow.circlepath")
+                            }
+                        }
+
                         Button(action: {
                             print("CameraListItemView - Edit button tapped for camera: \(camera.name)")
                             showingEditCamera = true
                         }) {
                             Label("Edit", systemImage: "pencil")
                         }
-                        
+
                         Button(role: .destructive, action: {
                             showingDeleteConfirmation = true
                         }) {

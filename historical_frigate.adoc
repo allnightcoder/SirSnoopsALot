@@ -1,0 +1,212 @@
+= Frigate Historical Playback Window Plan
+:toc:
+:toclevels: 2
+
+== Overview
+The goal is to introduce a dedicated visionOS window for reviewing historical Frigate NVR recordings. The feature fetches Frigate recordings metadata, presents an interactive timeline with motion/object overlays, plays HLS VOD streams through `AVPlayer`, and handles JWT authentication transparently. The plan below details architecture, data flow, UI composition, and error handling patterns to guide implementation.
+
+== Architecture
+[cols="1,3", options="header"]
+|===
+| Domain | Responsibilities
+| Window Scene | Configure `HistoricalFrigateWindow` scene, entry points, and handoff from camera list/context menu.
+| Data Layer | Fetch and cache recordings via `FrigateRecordingService`, map to timeline segments.
+| Playback Layer | Build `FrigatePlaybackController` with `AVPlayer` bridging timeline seeks to HLS ranges.
+| Authentication | Manage JWT lifecycle with `FrigateAuthService`, token refresh, and secure storage.
+| UI Layer | Compose SwiftUI views for timeline, playback, metadata overlays, loading/error surfaces.
+| State Management | Centralize state in `HistoricalFrigateStore` actor, exposing bindings to SwiftUI.
+|===
+
+Architecture interactions:
+
+```
++---------------------------+
+| CameraList / Context Menu |
++-------------+-------------+
+              |
+              v
++---------------------------+
+| HistoricalFrigateWindow   |
+|  - HistoricalFrigateView  |
++------+--------------------+
+       | State bindings
+       v
++---------------------------+
+| HistoricalFrigateStore    |
+|  (Observable + Actors)    |
++----+------+---+-----------+
+     |      |   |
+     |      |   +-------------------------+
+     |      |                             |
+     |      v                             v
+     |  FrigateRecordingService    FrigatePlaybackController
+     |  (API & Caching)           (AVPlayer / ResourceLoader)
+     |      |
+     v      v
+FrigateAuthService -----> Frigate API (Login, Recordings, VOD)
+```
+
+== New Files and Types Needed
+- `Sources/App/Scenes/HistoricalFrigateWindow.swift`: visionOS window scene declaration.
+- `Sources/App/Views/HistoricalFrigateView.swift`: top-level composite view, orchestrates timeline and player.
+- `Sources/App/Views/Timeline/FrigateTimelineView.swift`: custom SwiftUI timeline surface.
+- `Sources/App/Views/Timeline/FrigateTimelineSegmentView.swift`: renders individual segments with motion/object ribbons.
+- `Sources/App/Playback/FrigatePlaybackController.swift`: wrapper around `AVPlayer` with seeking and auth hooks.
+- `Sources/App/Services/FrigateAuthService.swift`: login/token refresh handling using Keychain.
+- `Sources/App/Services/FrigateRecordingService.swift`: fetches recordings, merges segments, caches results.
+- `Sources/App/Models/FrigateRecording.swift`: Codable structures for API responses and derived timeline models.
+- `Sources/App/State/HistoricalFrigateStore.swift`: ObservableObject + actors bridging data layer and UI events.
+- `Tests/HistoricalFrigateTests/...`: unit and snapshot tests (timeline rendering, auth flows, data merging).
+
+== UI Component Breakdown
+- `HistoricalFrigateWindow`: registers a `WindowGroup`/`ImmersiveSpace` depending on user choice; handles `CameraConfig` selection.
+- `HistoricalFrigateView`: `NavigationStack` with toolbar for date range picker, playback controls, and camera switcher.
+- `FrigateTimelineView`: horizontal scrollable `Canvas` + `TimelineRuler` showing segments, using `TimelineViewport` for zoom/pan.
+- `FrigateTimelineSegmentView`: draws segment rectangles with color-coded motion/object intensity and tooltips on hover/focus.
+- `FrigatePlayerView`: wraps `VideoPlayer` driven by `FrigatePlaybackController` and overlays buffering/auth status.
+- `LoadingOverlay` & `ErrorBanner`: reusable components for asynchronous states.
+
+Recommended layout (window mode):
+
+```
++----------------------------------------------------+
+| Header: Camera picker | Date range | Auth Status   |
++----------------------------------------------------+
+| FrigatePlayerView (VideoPlayer with ornaments)     |
++----------------------------------------------------+
+| Timeline scrubber with motion/object ribbons       |
+|  Zoom slider | Jump to next motion | Playback HUD  |
++----------------------------------------------------+
+| Event log / metadata (optional expandable drawer)  |
++----------------------------------------------------+
+```
+
+== API Integration Strategy
+- `FrigateAuthService`
+  * `login(credentials: FrigateCredentials) async throws -> AuthSession`
+  * `refreshIfNeeded() async throws -> AuthSession`
+  * Stores credentials/token in Keychain with `SecItemAdd/Update`.
+- `FrigateRecordingService`
+  * `fetchRecordings(cameraId: String, range: DateInterval) async throws -> [FrigateRecording]`
+  * Uses `URLSession` with `Authorization: Bearer <token>` header from `FrigateAuthService`.
+  * Merges overlapping segments, buckets by minute/hour for timeline performance.
+- VOD URL builder: `/vod/{camera}/start/{unix}/end/{unix}/master.m3u8` constructed via `URLComponents` ensures URL safety.
+- Network stack: shared `URLSession` configured with `URLSessionConfiguration.ephemeral`, custom `URLProtocol` optional for logging.
+- Caching: schedule background refresh tasks to prefetch metadata for currently visible range (±6 hours).
+
+[source,swift]
+----
+let request = URLRequest(url: frigateURL
+    .appendingPathComponent("vod")
+    .appendingPathComponent(cameraId)
+    .appendingPathComponent("start")
+    .appendingPathComponent(String(Int(start.timeIntervalSince1970)))
+    .appendingPathComponent("end")
+    .appendingPathComponent(String(Int(end.timeIntervalSince1970)))
+    .appendingPathComponent("master.m3u8"))
+----
+
+== State Management Approach
+- `HistoricalFrigateStore`: `@Observable` or `ObservableObject` (depending on Swift version) orchestrating:
+  * `@Published var selectedRange: DateInterval`
+  * `@Published var timelineSegments: [TimelineSegment]`
+  * `@Published var playbackState: PlaybackState`
+  * `@Published var errors: [HistoricalError]`
+- Internals use `actor HistoricalFrigateCoordinator` to serialize network interactions and cancellation.
+- Events: `.load(range)`, `.scrub(to:)`, `.play`, `.pause`, `.resumeAfterAuth`, `.handleError`.
+- Concurrency: leverage `Task` cancellations on range updates; use `AsyncStream` to emit timeline updates progressively.
+- Bindings: `HistoricalFrigateView` subscribes via `@StateObject` created per window scene; timeline gestures mutate store actions.
+
+State transition snippet:
+
+[source,swift]
+----
+func load(range: DateInterval) {
+    Task(priority: .userInitiated) {
+        await coordinator.cancelPendingLoads()
+        do {
+            let segments = try await coordinator.fetchSegments(range: range)
+            await MainActor.run { self.timelineSegments = segments }
+        } catch {
+            await MainActor.run { self.errors.append(.data(error)) }
+        }
+    }
+}
+----
+
+== Timeline Scrubbing Implementation
+- Data model: `TimelineSegment` with `id`, `start`, `end`, `motionScore`, `objectScore`, `availability: AvailabilityStatus`.
+- Rendering: use `Canvas` to draw segments; adapt colors based on scores (e.g., blue gradient for motion).
+- Gestures: combine `DragGesture(minimumDistance: 2)` for scrub, `MagnificationGesture` for zoom.
+- Snapping: round scrubs to nearest segment boundary or user-defined step size.
+- Lazy fetching: when viewport edge crosses cached range threshold, trigger `load(range: expandedRange)`.
+- Accessibility: support focus-based scrubbing with `Digital Crown` events and keyboard arrows.
+
+[source,swift]
+----
+FrigateTimelineView(
+    segments: store.timelineSegments,
+    selectedTime: $store.playbackState.currentTime,
+    visibleRange: $store.visibleRange
+)
+.onReachRangeBoundary { boundary in
+    store.prefetchMore(for: boundary)
+}
+----
+
+== Video Playback Integration
+- `FrigatePlaybackController`
+  * Owns `AVPlayer` and `AVPlayerItem`.
+  * Uses `AVURLAsset` with custom `AVAssetResourceLoaderDelegate` to inject `Authorization` headers.
+  * Translates timeline scrubs into `seek(to:toleranceBefore:toleranceAfter:)` aligned with segment start.
+  * Exposes `Publisher`/`AsyncStream` for buffering, status, and errors.
+- `FrigatePlayerView`
+  * Wraps SwiftUI `VideoPlayer(player: controller.player)`.
+  * Adds overlay controls (play/pause, seek ±10s, playback speed).
+  * Displays buffering spinner via `controller.isBuffering` binding.
+
+[source,swift]
+----
+let asset = AVURLAsset(url: vodURL)
+asset.resourceLoader.setDelegate(authLoader, queue: .global(qos: .userInitiated))
+let item = AVPlayerItem(asset: asset)
+player.replaceCurrentItem(with: item)
+player.play()
+----
+
+== Authentication Handling
+- Credentials stored per `CameraConfig` using Keychain access group aligned with app bundle group.
+- `FrigateAuthService` responsibilities:
+  * Maintain `AuthSession` struct (`token`, `expiry`, `refreshDate`).
+  * React to `401` responses by refreshing token (retry once per request).
+  * Provide Combine/AsyncSequence updates for session state to UI.
+- Login flow triggered when user first opens historical window; silent refresh on subsequent loads.
+- Background refresh scheduled via `Task` that checks `session.refreshDate` every 5 minutes.
+
+[source,swift]
+----
+func authorizedRequest(_ request: URLRequest) async throws -> URLRequest {
+    var request = request
+    let session = try await refreshIfNeeded()
+    request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
+    return request
+}
+----
+
+== Error Handling
+- Error taxonomy: `.authentication`, `.network`, `.dataParsing`, `.playback`, `.timelineUnavailable`.
+- UI responses:
+  * Auth errors: present modal login sheet with retry.
+  * Network errors: banner with auto-retry countdown.
+  * Playback errors: inline overlay with "Reload Stream" button.
+  * Timeline gaps: show hashed filler segments and tooltip.
+- Logging: integrate with existing telemetry (`Analytics.log(event:)`).
+- Tests: simulate 401, networking failure, corrupted JSON, HLS stall.
+
+== Future Enhancements
+- Smart search: filter timeline by detected objects (vehicles, people) using Frigate event API.
+- Multi-camera synchronization: side-by-side playback for correlated events.
+- Export clips: generate shareable MP4 snippets via server-side clipping endpoint.
+- Offline caching: pre-download recent segments for disconnected review.
+- Voice control: support Siri intents for "Show motion events from front door yesterday".
+

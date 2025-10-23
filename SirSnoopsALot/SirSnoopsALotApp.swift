@@ -28,12 +28,21 @@ struct SirSnoopsALotApp: App {
         WindowGroup(id: "main") {
             ContentView()
         }
-        
+
         WindowGroup(id: "floating", for: CameraConfig.self) { $camera in
             FloatingCameraView(camera: $camera.wrappedValue)
         }
         .windowStyle(.plain)
         .handlesExternalEvents(matching: [Activity.floatCamera])
+
+        WindowGroup(id: "historical", for: CameraConfig.self) { $camera in
+            if let camera = $camera.wrappedValue {
+                HistoricalFrigateWindowView(camera: camera)
+            } else {
+                Text("No camera selected")
+            }
+        }
+        .defaultSize(width: 1200, height: 800)
     }
     
     private func setupDefaultCamerasIfNeeded() {
