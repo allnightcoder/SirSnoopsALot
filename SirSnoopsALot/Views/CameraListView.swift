@@ -63,46 +63,47 @@ struct CameraListView: View {
         .navigationTitle("Cameras")
         .listStyle(.sidebar)
         .toolbar {
-            // Add Camera menu (always visible)
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Button(action: {
-                        showingAddCamera = true
-                    }) {
-                        Label("Add Manually", systemImage: "plus.circle")
-                    }
-
-                    Button(action: {
-                        showingFrigateImport = true
-                    }) {
-                        Label("Import from Frigate", systemImage: "arrow.down.doc")
-                    }
-                } label: {
-                    Label("Add Camera", systemImage: "plus")
-                }
-                .disabled(listMode != .normal)
-            }
-
-            // Normal mode buttons
+            // Normal mode: Add and Edit menus
             if case .normal = listMode {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: {
-                        withAnimation {
-                            listMode = .sorting
+                    Menu {
+                        Button(action: {
+                            showingAddCamera = true
+                        }) {
+                            Label("Add Manually", systemImage: "plus.circle")
                         }
-                    }) {
-                        Label("Reorder", systemImage: "arrow.up.arrow.down")
+
+                        Button(action: {
+                            showingFrigateImport = true
+                        }) {
+                            Label("Import from Frigate", systemImage: "arrow.down.doc")
+                        }
+                    } label: {
+                        Label("Add Camera", systemImage: "plus")
                     }
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: {
-                        withAnimation {
-                            listMode = .selecting
-                            selectedCameraIds.removeAll()
+                    Menu {
+                        Button(action: {
+                            withAnimation {
+                                listMode = .sorting
+                            }
+                        }) {
+                            Label("Reorder", systemImage: "arrow.up.arrow.down")
                         }
-                    }) {
-                        Label("Select", systemImage: "checkmark.circle")
+
+                        Button(action: {
+                            withAnimation {
+                                listMode = .selecting
+                                selectedCameraIds.removeAll()
+                            }
+                        }) {
+                            Label("Select", systemImage: "checkmark.circle")
+                        }
+                        .disabled(cameraManager.cameras.isEmpty)
+                    } label: {
+                        Label("Edit", systemImage: "ellipsis.circle")
                     }
                     .disabled(cameraManager.cameras.isEmpty)
                 }
