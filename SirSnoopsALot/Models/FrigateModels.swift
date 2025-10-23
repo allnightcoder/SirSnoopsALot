@@ -65,6 +65,7 @@ struct FrigateCameraImportable: Identifiable {
     let name: String                // Display name
     let mainStreamUrl: String?      // HD stream (detect/record role)
     let subStreamUrl: String?       // SD stream (secondary or clips role)
+    let isEnabledInFrigate: Bool    // Whether camera is enabled in Frigate config
     var isSelected: Bool = true     // User can toggle selection
 
     /// Can only import if we have at least a main stream
@@ -72,8 +73,11 @@ struct FrigateCameraImportable: Identifiable {
         mainStreamUrl != nil && !mainStreamUrl!.isEmpty
     }
 
-    /// Warning message if missing streams
+    /// Warning message if missing streams or disabled
     var warningMessage: String? {
+        if !isEnabledInFrigate {
+            return "Camera disabled in Frigate configuration"
+        }
         if mainStreamUrl == nil || mainStreamUrl!.isEmpty {
             return "No RTSP streams found"
         }

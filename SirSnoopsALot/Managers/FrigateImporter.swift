@@ -572,12 +572,6 @@ class FrigateImporter: ObservableObject {
         var cameras: [FrigateCameraImportable] = []
 
         for (key, frigateCamera) in config.cameras {
-            // Skip disabled cameras
-            guard frigateCamera.enabled else {
-                logger.debug("Skipping disabled camera: \(key)")
-                continue
-            }
-
             // Extract camera name (use key if name is not provided)
             let displayName = frigateCamera.name ?? key.replacingOccurrences(of: "_", with: " ").capitalized
 
@@ -594,12 +588,13 @@ class FrigateImporter: ObservableObject {
                 name: displayName,
                 mainStreamUrl: mainStream,
                 subStreamUrl: subStream,
-                isSelected: true
+                isEnabledInFrigate: frigateCamera.enabled,
+                isSelected: frigateCamera.enabled  // Disabled cameras unchecked by default
             )
 
             cameras.append(importable)
 
-            logger.debug("Parsed camera '\(displayName)' - Main: \(mainStream ?? "none"), Sub: \(subStream ?? "none")")
+            logger.debug("Parsed camera '\(displayName)' - Enabled: \(frigateCamera.enabled), Main: \(mainStream ?? "none"), Sub: \(subStream ?? "none")")
         }
 
         return cameras.sorted { $0.name < $1.name }
