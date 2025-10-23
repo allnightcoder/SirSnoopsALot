@@ -16,6 +16,8 @@ struct ImportFromFrigateView: View {
 
     // UI state
     @State private var showCameraList: Bool = false
+    @State private var showImportResult: Bool = false
+    @State private var importResultMessage: String = ""
 
     var body: some View {
         NavigationStack {
@@ -34,6 +36,13 @@ struct ImportFromFrigateView: View {
                         dismiss()
                     }
                 }
+            }
+            .alert("Import Complete", isPresented: $showImportResult) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text(importResultMessage)
             }
         }
     }
@@ -247,8 +256,9 @@ struct ImportFromFrigateView: View {
     }
 
     private func importSelectedCameras() {
-        importer.importCameras(importer.discoveredCameras)
-        dismiss()
+        let result = importer.importCameras(importer.discoveredCameras)
+        importResultMessage = result.friendlyMessage
+        showImportResult = true
     }
 
     // MARK: - Utility Functions
