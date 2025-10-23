@@ -286,10 +286,9 @@ class FrigateImporter: ObservableObject {
     ///   - go2rtcPublicUrl: Optional public go2rtc base URL
     /// - Returns: Resolved RTSP URL
     private func resolveStreamUrl(inputPath: String, go2rtcStreams: [String: [String]]?, go2rtcPublicUrl: String?) -> String? {
-        // Check if this is a go2rtc proxy URL (rtsp://127.0.0.1:8554/...)
-        if inputPath.starts(with: "rtsp://127.0.0.1:8554/") {
-            // Extract stream name from proxy URL
-            let streamName = inputPath.replacingOccurrences(of: "rtsp://127.0.0.1:8554/", with: "")
+        // Try to detect if this is a go2rtc stream (supports any IP/hostname on port 8554)
+        if let streamName = extractGo2rtcStreamName(from: inputPath, go2rtcStreams: go2rtcStreams) {
+            logger.debug("Detected go2rtc stream: \(streamName)")
 
             // Priority 1: Use public go2rtc URL if provided
             if let publicUrl = go2rtcPublicUrl, !publicUrl.isEmpty {
@@ -309,13 +308,39 @@ class FrigateImporter: ObservableObject {
                 }
             }
 
-            // Fallback: Use the 127.0.0.1 URL as-is (won't work remotely, but better than nothing)
-            logger.warning("go2rtc stream '\(streamName)' not found in config, using local URL: \(inputPath)")
+            // Fallback: Use the original URL as-is (may not work remotely)
+            logger.warning("go2rtc stream '\(streamName)' not found in config, using original URL: \(inputPath)")
             return inputPath
         }
 
         // Direct camera URL (already usable)
         return inputPath
+    }
+
+    /// Extracts go2rtc stream name from a URL if it appears to be a go2rtc stream
+    /// - Parameters:
+    ///   - urlString: URL to check (e.g., "rtsp://127.0.0.1:8554/camera1")
+    ///   - go2rtcStreams: Optional go2rtc stream definitions for validation
+    /// - Returns: Stream name if detected, nil otherwise
+    private func extractGo2rtcStreamName(from urlString: String, go2rtcStreams: [String: [String]]?) -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+
+        // Check if this looks like a go2rtc stream (port 8554 is go2rtc's default)
+        guard url.port == 8554 else { return nil }
+
+        // Extract stream name from path (e.g., "/camera1" → "camera1")
+        let streamName = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !streamName.isEmpty else { return nil }
+
+        // Verify this stream exists in go2rtc.streams config (prevents false positives)
+        if let streams = go2rtcStreams, streams[streamName] != nil {
+            return streamName
+        }
+
+        // If no go2rtc.streams available, assume it's a go2rtc stream based on port alone
+        // This handles cases where go2rtc section exists but streams might be missing
+        logger.debug("Assuming '\(streamName)' is go2rtc stream based on port 8554")
+        return streamName
     }
 }
 
