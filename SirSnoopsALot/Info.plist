@@ -20,6 +20,8 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app needs network access to stream local security cameras.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Used to securely access your saved Frigate server credentials</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
