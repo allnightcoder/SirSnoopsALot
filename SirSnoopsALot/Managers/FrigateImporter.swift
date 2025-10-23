@@ -56,7 +56,8 @@ class FrigateImporter: ObservableObject {
     ///   - username: Optional username for HTTP Basic Authentication
     ///   - password: Optional password for HTTP Basic Authentication
     ///   - go2rtcPublicUrl: Optional public go2rtc base URL (e.g., rtsp://frigate.example.com:8554)
-    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil, go2rtcPublicUrl: String? = nil) async {
+    ///   - ignoreSSLErrors: Whether to ignore SSL certificate validation errors (for self-signed certificates)
+    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil, go2rtcPublicUrl: String? = nil, ignoreSSLErrors: Bool = false) async {
         guard !host.isEmpty else {
             errorMessage = "Please enter a Frigate host address"
             return
@@ -66,63 +67,108 @@ class FrigateImporter: ObservableObject {
         errorMessage = nil
         discoveredCameras = []
 
-        do {
-            // Build Frigate API URL
-            let scheme = useHTTPS ? "https" : "http"
-            guard let url = URL(string: "\(scheme)://\(host):\(port)/api/config") else {
-                throw FrigateError.invalidURL
+        // Build Frigate API URL
+        let scheme = useHTTPS ? "https" : "http"
+        guard let url = URL(string: "\(scheme)://\(host):\(port)/api/config") else {
+            errorMessage = "Invalid Frigate server URL"
+            isLoading = false
+            return
+        }
+
+        logger.info("Fetching Frigate config from: \(url.absoluteString)")
+
+        // Determine which auth methods to try
+        var authMethodsToTry = determineAuthAttemptOrder(port: port)
+
+        // If no credentials provided, only try .none
+        if username == nil || password == nil {
+            authMethodsToTry = [.none]
+        } else {
+            // Check if we have a cached successful method for this host
+            if let cachedMethod = getCachedAuthMethod(for: host) {
+                // Try cached method first, but keep others as fallback
+                authMethodsToTry.removeAll { $0 == cachedMethod }
+                authMethodsToTry.insert(cachedMethod, at: 0)
+                logger.info("Using cached auth method: \(cachedMethod.rawValue)")
             }
+        }
 
-            logger.info("Fetching Frigate config from: \(url.absoluteString)")
+        // Try each auth method until one succeeds
+        var lastError: Error?
+        var lastStatusCode: Int?
 
-            // Create request with timeout
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 10.0
-            request.httpMethod = "GET"
+        for authMethod in authMethodsToTry {
+            logger.debug("Trying auth method: \(authMethod.rawValue)")
 
-            // Add HTTP Basic Auth if credentials provided
-            if let username = username, let password = password {
-                let credentials = "\(username):\(password)"
-                if let credentialsData = credentials.data(using: .utf8) {
-                    let base64Credentials = credentialsData.base64EncodedString()
-                    request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
-                    logger.debug("Added Basic Auth header for user: \(username)")
+            do {
+                // Attempt to fetch config with this auth method
+                let (data, _) = try await attemptFetchWithAuth(
+                    url: url,
+                    authMethod: authMethod,
+                    host: host,
+                    port: port,
+                    useHTTPS: useHTTPS,
+                    username: username ?? "",
+                    password: password ?? "",
+                    ignoreSSLErrors: ignoreSSLErrors
+                )
+
+                // Success! Parse the config
+                let decoder = JSONDecoder()
+                let frigateConfig = try decoder.decode(FrigateConfig.self, from: data)
+                let cameras = parseFrigateConfig(frigateConfig, go2rtcPublicUrl: go2rtcPublicUrl)
+
+                if cameras.isEmpty {
+                    errorMessage = "No cameras found in Frigate configuration"
+                } else {
+                    discoveredCameras = cameras
+                    logger.info("Successfully discovered \(cameras.count) cameras using \(authMethod.rawValue)")
+
+                    // Cache this successful auth method
+                    if username != nil && password != nil {
+                        cacheAuthMethod(authMethod, for: host)
+                    }
                 }
+
+                isLoading = false
+                return
+
+            } catch let error as FrigateError {
+                if case .httpError(let code) = error {
+                    lastStatusCode = code
+                    // 401/403 means auth failed, try next method
+                    if code == 401 || code == 403 {
+                        logger.debug("Auth method \(authMethod.rawValue) failed with \(code), trying next method")
+                        lastError = error
+                        continue
+                    } else {
+                        // Other HTTP errors (404, 500, etc.) - fail immediately
+                        errorMessage = error.localizedDescription
+                        logger.error("Request failed with HTTP \(code): \(error.localizedDescription)")
+                        isLoading = false
+                        return
+                    }
+                } else {
+                    // Non-HTTP errors (network, invalid response, etc.)
+                    lastError = error
+                    logger.error("Request failed: \(error.localizedDescription)")
+                }
+            } catch {
+                // Other errors (JSON decode, etc.)
+                lastError = error
+                logger.error("Unexpected error: \(error.localizedDescription)")
             }
+        }
 
-            // Execute request
-            let (data, response) = try await URLSession.shared.data(for: request)
-
-            // Check HTTP response
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw FrigateError.invalidResponse
-            }
-
-            guard httpResponse.statusCode == 200 else {
-                logger.error("HTTP error: \(httpResponse.statusCode)")
-                throw FrigateError.httpError(statusCode: httpResponse.statusCode)
-            }
-
-            // Parse JSON response
-            let decoder = JSONDecoder()
-            let frigateConfig = try decoder.decode(FrigateConfig.self, from: data)
-
-            // Parse cameras
-            let cameras = parseFrigateConfig(frigateConfig, go2rtcPublicUrl: go2rtcPublicUrl)
-
-            if cameras.isEmpty {
-                errorMessage = "No cameras found in Frigate configuration"
-            } else {
-                discoveredCameras = cameras
-                logger.info("Successfully discovered \(cameras.count) cameras from Frigate")
-            }
-
-        } catch let error as FrigateError {
-            errorMessage = error.localizedDescription
-            logger.error("Frigate error: \(error.localizedDescription)")
-        } catch {
+        // All auth methods failed
+        if let statusCode = lastStatusCode, (statusCode == 401 || statusCode == 403) {
+            // Clear cached method if it exists
+            clearCachedAuthMethod(for: host)
+            errorMessage = "Authentication failed. Please check your username and password."
+        } else if let error = lastError {
             errorMessage = "Failed to connect: \(error.localizedDescription)"
-            logger.error("Unexpected error: \(error.localizedDescription)")
+        } else {
+            errorMessage = "Failed to connect to Frigate server"
         }
 
         isLoading = false
@@ -170,6 +216,208 @@ class FrigateImporter: ObservableObject {
     }
 
     // MARK: - Private Methods
+
+    /// Attempts to login to Frigate and obtain a JWT token
+    /// - Parameters:
+    ///   - host: Frigate server hostname
+    ///   - port: Frigate API port
+    ///   - useHTTPS: Whether to use HTTPS
+    ///   - username: Username for authentication
+    ///   - password: Password for authentication
+    ///   - ignoreSSLErrors: Whether to ignore SSL certificate errors
+    /// - Returns: JWT token string if login successful, nil otherwise
+    private func loginToFrigate(host: String, port: Int, useHTTPS: Bool, username: String, password: String, ignoreSSLErrors: Bool) async -> String? {
+        let scheme = useHTTPS ? "https" : "http"
+        guard let url = URL(string: "\(scheme)://\(host):\(port)/api/login") else {
+            logger.error("Invalid login URL")
+            return nil
+        }
+
+        logger.info("Attempting JWT login to: \(url.absoluteString)")
+
+        // Create login request
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10.0
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        // Create JSON body
+        let loginPayload: [String: String] = ["user": username, "password": password]
+        guard let jsonData = try? JSONEncoder().encode(loginPayload) else {
+            logger.error("Failed to encode login payload")
+            return nil
+        }
+        request.httpBody = jsonData
+
+        // Create URLSession with optional SSL bypass
+        let urlSession: URLSession
+        if ignoreSSLErrors {
+            let delegate = SSLBypassDelegate()
+            urlSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+        } else {
+            urlSession = .shared
+        }
+
+        do {
+            let (_, response) = try await urlSession.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                logger.error("Invalid response from login endpoint")
+                return nil
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                logger.error("Login failed with status: \(httpResponse.statusCode)")
+                return nil
+            }
+
+            // Extract JWT token from Set-Cookie header
+            if let setCookie = httpResponse.value(forHTTPHeaderField: "Set-Cookie"),
+               let tokenRange = setCookie.range(of: "frigate_token="),
+               let endRange = setCookie.range(of: ";", range: tokenRange.upperBound..<setCookie.endIndex) {
+                let token = String(setCookie[tokenRange.upperBound..<endRange.lowerBound])
+                logger.info("Successfully obtained JWT token")
+                return token
+            } else {
+                logger.error("No frigate_token found in Set-Cookie header")
+                return nil
+            }
+        } catch {
+            logger.error("Login request failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// Attempts to fetch Frigate config with a specific auth method
+    /// - Parameters:
+    ///   - url: The Frigate API config URL
+    ///   - authMethod: The authentication method to use
+    ///   - host: Frigate hostname
+    ///   - port: Frigate port
+    ///   - useHTTPS: Whether to use HTTPS
+    ///   - username: Username for authentication
+    ///   - password: Password for authentication
+    ///   - ignoreSSLErrors: Whether to ignore SSL errors
+    /// - Returns: Tuple of (data, statusCode)
+    private func attemptFetchWithAuth(url: URL, authMethod: FrigateAuthMethod, host: String, port: Int, useHTTPS: Bool, username: String, password: String, ignoreSSLErrors: Bool) async throws -> (Data, Int) {
+        // Create request
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 10.0
+        request.httpMethod = "GET"
+
+        // Add authentication header based on method
+        switch authMethod {
+        case .none:
+            // No authentication header
+            logger.debug("Attempting connection with no authentication")
+
+        case .basicAuth:
+            // HTTP Basic Auth
+            let credentials = "\(username):\(password)"
+            if let credentialsData = credentials.data(using: .utf8) {
+                let base64Credentials = credentialsData.base64EncodedString()
+                request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+                logger.debug("Attempting connection with Basic Auth for user: \(username)")
+            }
+
+        case .jwt:
+            // JWT - need to login first
+            guard let jwtToken = await loginToFrigate(
+                host: host,
+                port: port,
+                useHTTPS: useHTTPS,
+                username: username,
+                password: password,
+                ignoreSSLErrors: ignoreSSLErrors
+            ) else {
+                // Login failed
+                throw FrigateError.httpError(statusCode: 401)
+            }
+
+            // Use JWT token as Bearer auth
+            request.setValue("Bearer \(jwtToken)", forHTTPHeaderField: "Authorization")
+            logger.debug("Attempting connection with JWT Bearer token")
+        }
+
+        // Create URLSession with optional SSL bypass
+        let urlSession: URLSession
+        if ignoreSSLErrors {
+            let delegate = SSLBypassDelegate()
+            urlSession = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+            if authMethod == .none {
+                logger.warning("SSL certificate validation disabled")
+            }
+        } else {
+            urlSession = .shared
+        }
+
+        // Execute request
+        let (data, response) = try await urlSession.data(for: request)
+
+        // Check HTTP response
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw FrigateError.invalidResponse
+        }
+
+        let statusCode = httpResponse.statusCode
+        guard statusCode == 200 else {
+            logger.debug("HTTP \(statusCode) with \(authMethod.rawValue) auth")
+            throw FrigateError.httpError(statusCode: statusCode)
+        }
+
+        return (data, statusCode)
+    }
+
+    /// Determines the authentication attempt order based on port and context
+    /// - Parameter port: The Frigate API port
+    /// - Returns: Array of auth methods to try in order
+    private func determineAuthAttemptOrder(port: Int) -> [FrigateAuthMethod] {
+        switch port {
+        case 5000:
+            // Port 5000 is Frigate's unauthenticated internal port
+            // JWT login endpoint doesn't exist here
+            return [.none, .basicAuth]
+        case 8971:
+            // Port 8971 is Frigate's authenticated port
+            // JWT is the native method
+            return [.jwt, .none]
+        default:
+            // Other ports (443, 80, custom) = reverse proxy
+            // Try JWT first (Frigate's preferred), then Basic Auth (proxy), then none
+            return [.jwt, .basicAuth, .none]
+        }
+    }
+
+    /// Gets the cached authentication method for a host
+    /// - Parameter host: The Frigate hostname
+    /// - Returns: Cached auth method or nil
+    private func getCachedAuthMethod(for host: String) -> FrigateAuthMethod? {
+        let key = "frigate_auth_\(host)"
+        guard let rawValue = UserDefaults.standard.string(forKey: key),
+              let method = FrigateAuthMethod(rawValue: rawValue) else {
+            return nil
+        }
+        logger.debug("Found cached auth method for \(host): \(method.rawValue)")
+        return method
+    }
+
+    /// Caches the successful authentication method for a host
+    /// - Parameters:
+    ///   - method: The auth method that succeeded
+    ///   - host: The Frigate hostname
+    private func cacheAuthMethod(_ method: FrigateAuthMethod, for host: String) {
+        let key = "frigate_auth_\(host)"
+        UserDefaults.standard.set(method.rawValue, forKey: key)
+        logger.info("Cached auth method for \(host): \(method.rawValue)")
+    }
+
+    /// Clears the cached authentication method for a host
+    /// - Parameter host: The Frigate hostname
+    private func clearCachedAuthMethod(for host: String) {
+        let key = "frigate_auth_\(host)"
+        UserDefaults.standard.removeObject(forKey: key)
+        logger.debug("Cleared cached auth method for \(host)")
+    }
 
     /// Parses Frigate configuration and extracts importable cameras
     private func parseFrigateConfig(_ config: FrigateConfig, go2rtcPublicUrl: String?) -> [FrigateCameraImportable] {
@@ -344,6 +592,14 @@ class FrigateImporter: ObservableObject {
     }
 }
 
+// MARK: - Authentication Types
+
+enum FrigateAuthMethod: String {
+    case none = "none"
+    case basicAuth = "basic"
+    case jwt = "jwt"
+}
+
 // MARK: - Error Types
 
 enum FrigateError: LocalizedError {
@@ -374,5 +630,25 @@ enum FrigateError: LocalizedError {
         case .noData:
             return "No data received from Frigate server"
         }
+    }
+}
+
+// MARK: - SSL Bypass Delegate
+
+/// URLSession delegate that bypasses SSL certificate validation
+/// WARNING: Only use when explicitly requested by user for trusted servers with self-signed certificates
+private class SSLBypassDelegate: NSObject, URLSessionDelegate {
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        // Only bypass for server trust challenges (SSL certificate validation)
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            // For other authentication methods (like HTTP Basic Auth), use default handling
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // Accept the server's certificate without validation
+        let credential = URLCredential(trust: serverTrust)
+        completionHandler(.useCredential, credential)
     }
 }

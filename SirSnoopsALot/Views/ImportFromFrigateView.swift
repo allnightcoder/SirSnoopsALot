@@ -12,6 +12,10 @@ struct ImportFromFrigateView: View {
     @State private var password: String = ""
     @State private var showAuthSection: Bool = false
 
+    // SSL settings (optional)
+    @State private var ignoreSSLErrors: Bool = false
+    @State private var showSSLSection: Bool = false
+
     // go2rtc settings (optional)
     @State private var go2rtcPublicUrl: String = ""
     @State private var showGo2rtcSection: Bool = false
@@ -20,6 +24,17 @@ struct ImportFromFrigateView: View {
     @State private var showCameraList: Bool = false
     @State private var showImportResult: Bool = false
     @State private var importResultMessage: String = ""
+
+    // UserDefaults keys for persistence
+    private let frigateUrlKey = "frigate_last_url"
+    private let frigateUsernameKey = "frigate_last_username"
+    private let frigateGo2rtcUrlKey = "frigate_last_go2rtc_url"
+    private let frigateIgnoreSSLKey = "frigate_last_ignore_ssl"
+
+    // Computed property to check if password is missing when username exists
+    private var passwordMissing: Bool {
+        !username.isEmpty && password.isEmpty
+    }
 
     var body: some View {
         NavigationStack {
@@ -45,6 +60,9 @@ struct ImportFromFrigateView: View {
                 }
             } message: {
                 Text(importResultMessage)
+            }
+            .onAppear {
+                loadSavedSettings()
             }
         }
     }
@@ -75,9 +93,41 @@ struct ImportFromFrigateView: View {
 
                     SecureField("Password", text: $password)
                         .textContentType(.password)
+
+                    if passwordMissing {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.caption)
+                            Text("Password required when username is provided")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
                 }
             } footer: {
                 Text("Required for Frigate instances with authentication enabled")
+            }
+
+            Section {
+                DisclosureGroup("SSL Settings (Optional)", isExpanded: $showSSLSection) {
+                    Toggle("Ignore SSL Certificate Errors", isOn: $ignoreSSLErrors)
+
+                    if ignoreSSLErrors {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.orange)
+                                .font(.caption)
+                            Text("SSL certificate validation disabled. Only use this for trusted servers with self-signed or expired certificates.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            } footer: {
+                Text("Enable this option if your Frigate server uses a self-signed or expired SSL certificate")
             }
 
             Section {
@@ -244,6 +294,9 @@ struct ImportFromFrigateView: View {
             return
         }
 
+        // Save settings (except password)
+        saveSettings()
+
         Task {
             await importer.fetchCameras(
                 host: host,
@@ -251,7 +304,8 @@ struct ImportFromFrigateView: View {
                 useHTTPS: useHTTPS,
                 username: username.isEmpty ? nil : username,
                 password: password.isEmpty ? nil : password,
-                go2rtcPublicUrl: go2rtcPublicUrl.isEmpty ? nil : go2rtcPublicUrl
+                go2rtcPublicUrl: go2rtcPublicUrl.isEmpty ? nil : go2rtcPublicUrl,
+                ignoreSSLErrors: ignoreSSLErrors
             )
 
             // If successful, show camera list
@@ -292,8 +346,16 @@ struct ImportFromFrigateView: View {
             return nil
         }
 
-        // Extract port (default to 5000 for Frigate if not specified)
-        let port = url.port ?? 5000
+        // Extract port with protocol-aware defaults
+        // HTTPS defaults to 443 (standard reverse proxy)
+        // HTTP defaults to 5000 (Frigate's default)
+        // Explicit port always takes precedence
+        let port: Int
+        if let explicitPort = url.port {
+            port = explicitPort
+        } else {
+            port = useHTTPS ? 443 : 5000
+        }
 
         return (host, port, useHTTPS)
     }
@@ -311,6 +373,33 @@ struct ImportFromFrigateView: View {
             obfuscated = obfuscated.replacingOccurrences(of: "\(user):\(password)@", with: "\(user):****@")
         }
         return obfuscated
+    }
+
+    /// Loads saved settings from UserDefaults
+    private func loadSavedSettings() {
+        frigateUrl = UserDefaults.standard.string(forKey: frigateUrlKey) ?? ""
+        username = UserDefaults.standard.string(forKey: frigateUsernameKey) ?? ""
+        go2rtcPublicUrl = UserDefaults.standard.string(forKey: frigateGo2rtcUrlKey) ?? ""
+        ignoreSSLErrors = UserDefaults.standard.bool(forKey: frigateIgnoreSSLKey)
+
+        // Auto-expand sections if values are present
+        if !username.isEmpty {
+            showAuthSection = true
+        }
+        if !go2rtcPublicUrl.isEmpty {
+            showGo2rtcSection = true
+        }
+        if ignoreSSLErrors {
+            showSSLSection = true
+        }
+    }
+
+    /// Saves current settings to UserDefaults (except password)
+    private func saveSettings() {
+        UserDefaults.standard.set(frigateUrl, forKey: frigateUrlKey)
+        UserDefaults.standard.set(username, forKey: frigateUsernameKey)
+        UserDefaults.standard.set(go2rtcPublicUrl, forKey: frigateGo2rtcUrlKey)
+        UserDefaults.standard.set(ignoreSSLErrors, forKey: frigateIgnoreSSLKey)
     }
 }
 
