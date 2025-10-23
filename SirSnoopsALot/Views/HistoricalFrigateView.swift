@@ -1,5 +1,4 @@
 import SwiftUI
-import AVKit
 
 struct HistoricalFrigateView: View {
     @StateObject var store: HistoricalFrigateStore
@@ -83,12 +82,19 @@ struct HistoricalFrigateView: View {
                         .foregroundColor(.gray)
                 }
             } else {
-                // Video player
-                VideoPlayer(player: store.playbackController.player)
-                    .overlay(alignment: .bottom) {
-                        playbackControls
-                            .padding()
-                    }
+                // FFmpeg video player
+                if let frame = store.playbackController.currentFrame {
+                    Image(uiImage: frame)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .overlay(alignment: .bottom) {
+                            playbackControls
+                                .padding()
+                        }
+                } else {
+                    ProgressView("Loading video...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
 
                 // Loading overlay
                 if case .loading = store.playbackState {

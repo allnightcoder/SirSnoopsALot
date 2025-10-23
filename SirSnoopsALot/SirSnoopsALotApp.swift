@@ -15,11 +15,11 @@ struct SirSnoopsALotApp: App {
 
     init() {
         setupDefaultCamerasIfNeeded()
-        
+
         if !enableFFmpegLogging {
             av_log_set_level(AV_LOG_QUIET)
         }
-        
+
         let version = String(cString: av_version_info())
         print("SirSnoopsALotApp - FFmpeg version: \(version)")
     }
