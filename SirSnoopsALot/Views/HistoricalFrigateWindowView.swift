@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Wrapper view that handles credentials and initializes the historical view
 struct HistoricalFrigateWindowView: View {
@@ -9,11 +10,27 @@ struct HistoricalFrigateWindowView: View {
     @State private var username: String = ""
     @State private var password: String = ""
     @State private var store: HistoricalFrigateStore?
+    @State private var hasAttemptedAutoConnect = false
+    private let savedCredentialsKey = "frigate_history_credentials"
 
     var body: some View {
         Group {
             if let store = store {
                 HistoricalFrigateView(store: store)
+                    .onReceive(store.$errors) { errors in
+                        guard let last = errors.last else { return }
+                        if case .authentication = last {
+                            self.store = nil
+                            showingCredentialsSheet = true
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Update Credentials") {
+                                showingCredentialsSheet = true
+                            }
+                        }
+                    }
             } else {
                 // Initial state - need credentials
                 VStack(spacing: 20) {
@@ -34,14 +51,18 @@ struct HistoricalFrigateWindowView: View {
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                 }
-                .sheet(isPresented: $showingCredentialsSheet) {
-                    credentialsSheet
-                }
                 .onAppear {
-                    // Auto-show credentials sheet if not configured
-                    showingCredentialsSheet = true
+                    if !hasAttemptedAutoConnect && loadSavedCredentials() {
+                        hasAttemptedAutoConnect = true
+                        connectToFrigate()
+                    } else {
+                        showingCredentialsSheet = true
+                    }
                 }
             }
+        }
+        .sheet(isPresented: $showingCredentialsSheet) {
+            credentialsSheet
         }
     }
 
@@ -100,14 +121,36 @@ struct HistoricalFrigateWindowView: View {
             return
         }
 
+        hasAttemptedAutoConnect = true
+
         let credentials = FrigateCredentials(
             username: username,
             password: password,
             serverURL: url
         )
 
+        saveCredentials(credentials)
+
         // Initialize store with credentials
         store = HistoricalFrigateStore(camera: camera, credentials: credentials)
         showingCredentialsSheet = false
+    }
+
+    @discardableResult
+    private func loadSavedCredentials() -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: savedCredentialsKey),
+              let saved = try? JSONDecoder().decode(FrigateCredentials.self, from: data),
+              !saved.username.isEmpty,
+              !saved.password.isEmpty else { return false }
+        serverURL = saved.serverURL.absoluteString
+        username = saved.username
+        password = saved.password
+        return true
+    }
+
+    private func saveCredentials(_ credentials: FrigateCredentials) {
+        if let data = try? JSONEncoder().encode(credentials) {
+            UserDefaults.standard.set(data, forKey: savedCredentialsKey)
+        }
     }
 }
