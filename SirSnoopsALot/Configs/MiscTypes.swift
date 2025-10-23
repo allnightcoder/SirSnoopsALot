@@ -2,6 +2,18 @@ import Foundation
 import CoreTransferable
 import UniformTypeIdentifiers
 
+/// Represents the source/type of a camera
+enum CameraType: String, Codable, CaseIterable {
+    case frigate = "frigate"
+
+    var displayName: String {
+        switch self {
+        case .frigate:
+            return "Frigate"
+        }
+    }
+}
+
 /// Holds pre-probed (cached) RTSP metadata to speed up future stream openings.
 class RTSPInfo: Codable, Hashable, CustomDebugStringConvertible {
     var codecID: Int32
@@ -67,6 +79,7 @@ struct CameraConfig: Codable, Transferable, Hashable {
     var description: String
     var order: Int
     var showHighRes: Bool
+    var cameraType: CameraType?
     var highResStreamInfo: RTSPInfo?
     var lowResStreamInfo: RTSPInfo?
     

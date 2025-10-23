@@ -13,7 +13,7 @@ final class CameraManager: ObservableObject {
     
     // MARK: - Public Methods
     
-    func addCamera(name: String, highResUrl: String, lowResUrl: String, description: String) {
+    func addCamera(name: String, highResUrl: String, lowResUrl: String, description: String, cameraType: CameraType? = nil) {
         let newCamera = CameraConfig(
             id: UUID(),
             name: name,
@@ -21,19 +21,21 @@ final class CameraManager: ObservableObject {
             lowResUrl: lowResUrl,
             description: description,
             order: getNextOrder(),
-            showHighRes: false
+            showHighRes: false,
+            cameraType: cameraType
         )
         cameras.append(newCamera)
         cameras.sort(by: { $0.order < $1.order })
         saveCameras()
     }
     
-    func updateCamera(_ camera: CameraConfig, name: String, highResUrl: String, lowResUrl: String, description: String) {
+    func updateCamera(_ camera: CameraConfig, name: String, highResUrl: String, lowResUrl: String, description: String, cameraType: CameraType? = nil) {
         if let index = cameras.firstIndex(where: { $0.id == camera.id }) {
             cameras[index].name = name
             cameras[index].highResUrl = highResUrl
             cameras[index].lowResUrl = lowResUrl
             cameras[index].description = description
+            cameras[index].cameraType = cameraType
             saveCameras()
         }
     }

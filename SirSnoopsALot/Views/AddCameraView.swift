@@ -9,23 +9,25 @@ struct AddCameraView: View {
     @State private var highResUrl: String = ""
     @State private var lowResUrl: String = ""
     @State private var description: String = ""
-    
+    @State private var cameraType: CameraType? = nil
+
     init(editingCamera: CameraConfig? = nil) {
         self.editingCamera = editingCamera
-        
+
         if let camera = editingCamera {
             _name = State(initialValue: camera.name)
             _highResUrl = State(initialValue: camera.highResUrl)
             _lowResUrl = State(initialValue: camera.lowResUrl)
             _description = State(initialValue: camera.description)
+            _cameraType = State(initialValue: camera.cameraType)
         }
     }
     
     private func saveCamera() {
         if let editingCamera = editingCamera {
-            cameraManager.updateCamera(editingCamera, name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description)
+            cameraManager.updateCamera(editingCamera, name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description, cameraType: cameraType)
         } else {
-            cameraManager.addCamera(name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description)
+            cameraManager.addCamera(name: name, highResUrl: highResUrl, lowResUrl: lowResUrl, description: description, cameraType: cameraType)
         }
         dismiss()
     }
@@ -38,6 +40,13 @@ struct AddCameraView: View {
                     TextField("High Resolution RTSP URL", text: $highResUrl)
                     TextField("Low Resolution RTSP URL", text: $lowResUrl)
                     TextField("Description", text: $description)
+
+                    Picker("Camera Type", selection: $cameraType) {
+                        Text("Unknown").tag(nil as CameraType?)
+                        ForEach(CameraType.allCases, id: \.self) { type in
+                            Text(type.displayName).tag(type as CameraType?)
+                        }
+                    }
                 }
             }
             .navigationTitle(editingCamera != nil ? "Edit Camera" : "Add Camera")

@@ -346,7 +346,8 @@ class FrigateImporter: ObservableObject {
                 name: camera.name,
                 highResUrl: hdUrl,
                 lowResUrl: sdUrl,
-                description: "Imported from Frigate NVR"
+                description: "Imported from Frigate NVR",
+                cameraType: .frigate
             )
             importCount += 1
         }
