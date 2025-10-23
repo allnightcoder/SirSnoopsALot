@@ -8,6 +8,7 @@ private let logger = Logger(subsystem: "net.virtual-chaos.SirSnoopsALot", catego
 struct FrigateImportResult {
     let imported: Int
     let skipped: Int
+    let overwritten: Int
     let total: Int
 
     var friendlyMessage: String {
@@ -15,27 +16,38 @@ struct FrigateImportResult {
             return "No cameras were selected for import."
         }
 
-        if skipped == 0 {
+        if skipped == 0 && overwritten == 0 {
             if imported == 1 {
                 return "Successfully imported 1 camera!"
             } else {
                 return "Successfully imported \(imported) cameras!"
             }
-        } else if imported == 0 {
+        } else if imported == 0 && overwritten == 0 {
             if skipped == 1 {
                 return "1 camera was skipped because it already exists in your library."
             } else {
                 return "All \(skipped) cameras were skipped because they already exist in your library."
             }
+        } else if imported == 0 && skipped == 0 {
+            // All overwritten
+            if overwritten == 1 {
+                return "Successfully overwrote 1 existing camera!"
+            } else {
+                return "Successfully overwrote \(overwritten) existing cameras!"
+            }
         } else {
             // Mixed result
-            var message = "Imported \(imported) new camera\(imported == 1 ? "" : "s")."
-            if skipped == 1 {
-                message += " 1 camera was skipped because it already exists."
-            } else {
-                message += " \(skipped) cameras were skipped because they already exist."
+            var parts: [String] = []
+            if imported > 0 {
+                parts.append("\(imported) new")
             }
-            return message
+            if overwritten > 0 {
+                parts.append("\(overwritten) overwritten")
+            }
+            if skipped > 0 {
+                parts.append("\(skipped) skipped")
+            }
+            return "Import complete: " + parts.joined(separator: ", ")
         }
     }
 }
@@ -320,12 +332,15 @@ class FrigateImporter: ObservableObject {
     }
 
     /// Imports selected cameras into CameraManager
-    /// - Parameter cameras: List of cameras to import (only selected ones will be imported)
-    /// - Returns: Result containing counts of imported and skipped cameras
-    func importCameras(_ cameras: [FrigateCameraImportable]) -> FrigateImportResult {
+    /// - Parameters:
+    ///   - cameras: List of cameras to import (only selected ones will be imported)
+    ///   - overwriteDuplicates: If true, overwrites existing cameras with matching URLs; if false, skips them
+    /// - Returns: Result containing counts of imported, skipped, and overwritten cameras
+    func importCameras(_ cameras: [FrigateCameraImportable], overwriteDuplicates: Bool = false) -> FrigateImportResult {
         let cameraManager = CameraManager.shared
         var importCount = 0
         var skippedCount = 0
+        var overwrittenCount = 0
         var totalSelected = 0
 
         for camera in cameras where camera.isSelected && camera.canImport {
@@ -336,12 +351,28 @@ class FrigateImporter: ObservableObject {
             let sdUrl = camera.effectiveSubStreamUrl
 
             // Check if camera already exists by comparing RTSP URLs
-            if cameraExists(highResUrl: hdUrl, lowResUrl: sdUrl, in: cameraManager) {
-                logger.info("Skipping camera '\(camera.name)' - already exists with matching RTSP URLs")
-                skippedCount += 1
+            if let existingCamera = findExistingCamera(highResUrl: hdUrl, lowResUrl: sdUrl, in: cameraManager) {
+                if overwriteDuplicates {
+                    // Overwrite existing camera data
+                    logger.info("Overwriting camera '\(camera.name)' - updating existing camera")
+                    cameraManager.updateCamera(
+                        existingCamera,
+                        name: camera.name,
+                        highResUrl: hdUrl,
+                        lowResUrl: sdUrl,
+                        description: "Imported from Frigate NVR",
+                        cameraType: .frigate
+                    )
+                    overwrittenCount += 1
+                } else {
+                    // Skip existing camera
+                    logger.info("Skipping camera '\(camera.name)' - already exists with matching RTSP URLs")
+                    skippedCount += 1
+                }
                 continue
             }
 
+            // Add new camera
             cameraManager.addCamera(
                 name: camera.name,
                 highResUrl: hdUrl,
@@ -352,11 +383,12 @@ class FrigateImporter: ObservableObject {
             importCount += 1
         }
 
-        logger.info("Import complete: \(importCount) imported, \(skippedCount) skipped")
+        logger.info("Import complete: \(importCount) imported, \(overwrittenCount) overwritten, \(skippedCount) skipped")
 
         return FrigateImportResult(
             imported: importCount,
             skipped: skippedCount,
+            overwritten: overwrittenCount,
             total: totalSelected
         )
     }
@@ -601,21 +633,21 @@ class FrigateImporter: ObservableObject {
         return cameras.sorted { $0.name < $1.name }
     }
 
-    /// Checks if a camera with matching RTSP URLs already exists
+    /// Finds an existing camera with matching RTSP URLs
     /// - Parameters:
     ///   - highResUrl: High resolution RTSP URL to check
     ///   - lowResUrl: Low resolution RTSP URL to check
     ///   - cameraManager: Camera manager to check against
-    /// - Returns: True if a camera with matching URLs exists
-    private func cameraExists(highResUrl: String, lowResUrl: String, in cameraManager: CameraManager) -> Bool {
+    /// - Returns: The existing camera if found, nil otherwise
+    private func findExistingCamera(highResUrl: String, lowResUrl: String, in cameraManager: CameraManager) -> CameraConfig? {
         for existingCamera in cameraManager.cameras {
             // Check if both HD and SD URLs match
             // This ensures we're comparing the exact same camera
             if existingCamera.highResUrl == highResUrl && existingCamera.lowResUrl == lowResUrl {
-                return true
+                return existingCamera
             }
         }
-        return false
+        return nil
     }
 
     /// Extracts main (HD) and sub (SD) streams from Frigate inputs with smart go2rtc/camera URL resolution

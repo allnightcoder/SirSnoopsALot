@@ -20,6 +20,23 @@ struct ImportFromFrigateView: View {
     @State private var go2rtcPublicUrl: String = ""
     @State private var showGo2rtcSection: Bool = false
 
+    // Duplicate handling
+    enum DuplicateHandling: String, CaseIterable {
+        case skip = "Skip"
+        case overwrite = "Overwrite"
+
+        var description: String {
+            switch self {
+            case .skip:
+                return "Keep existing camera data"
+            case .overwrite:
+                return "Replace with new data"
+            }
+        }
+    }
+    @State private var duplicateHandling: DuplicateHandling = .skip
+    @State private var showDuplicateSection: Bool = false
+
     // UI state
     @State private var showCameraList: Bool = false
     @State private var showImportResult: Bool = false
@@ -30,6 +47,7 @@ struct ImportFromFrigateView: View {
     private let frigateUsernameKey = "frigate_last_username"
     private let frigateGo2rtcUrlKey = "frigate_last_go2rtc_url"
     private let frigateIgnoreSSLKey = "frigate_last_ignore_ssl"
+    private let frigateDuplicateHandlingKey = "frigate_duplicate_handling"
 
     // Computed property to check if password is missing when username exists
     private var passwordMissing: Bool {
@@ -266,6 +284,69 @@ struct ImportFromFrigateView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .padding(.horizontal, 4)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .padding(20)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .hoverEffect()
+
+                // Duplicate Camera Handling Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Button(action: { withAnimation { showDuplicateSection.toggle() } }) {
+                        HStack {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.title3)
+                                .foregroundColor(.orange)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Duplicate Cameras")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Optional")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showDuplicateSection ? 90 : 0))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if showDuplicateSection {
+                        VStack(spacing: 16) {
+                            // Modern segmented picker
+                            Picker("Duplicate Handling", selection: $duplicateHandling) {
+                                ForEach(DuplicateHandling.allCases, id: \.self) { option in
+                                    Text(option.rawValue).tag(option)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, 4)
+
+                            // Description of selected option
+                            HStack(spacing: 8) {
+                                Image(systemName: duplicateHandling == .skip ? "checkmark.shield" : "exclamationmark.triangle")
+                                    .foregroundColor(duplicateHandling == .skip ? .green : .orange)
+                                    .font(.caption)
+                                Text(duplicateHandling.description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+
+                            Text("Choose how to handle cameras that already exist in your library. Skip keeps existing data, Overwrite replaces it with the new import.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 4)
+                        }
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
@@ -529,7 +610,8 @@ struct ImportFromFrigateView: View {
     }
 
     private func importSelectedCameras() {
-        let result = importer.importCameras(importer.discoveredCameras)
+        let shouldOverwrite = (duplicateHandling == .overwrite)
+        let result = importer.importCameras(importer.discoveredCameras, overwriteDuplicates: shouldOverwrite)
         importResultMessage = result.friendlyMessage
         showImportResult = true
     }
@@ -600,6 +682,12 @@ struct ImportFromFrigateView: View {
         go2rtcPublicUrl = UserDefaults.standard.string(forKey: frigateGo2rtcUrlKey) ?? ""
         ignoreSSLErrors = UserDefaults.standard.bool(forKey: frigateIgnoreSSLKey)
 
+        // Load duplicate handling preference
+        if let savedHandling = UserDefaults.standard.string(forKey: frigateDuplicateHandlingKey),
+           let handling = DuplicateHandling(rawValue: savedHandling) {
+            duplicateHandling = handling
+        }
+
         // Auto-expand sections if values are present
         if !username.isEmpty {
             showAuthSection = true
@@ -610,6 +698,9 @@ struct ImportFromFrigateView: View {
         if ignoreSSLErrors {
             showSSLSection = true
         }
+        if duplicateHandling == .overwrite {
+            showDuplicateSection = true
+        }
     }
 
     /// Saves current settings to UserDefaults (except password)
@@ -618,6 +709,7 @@ struct ImportFromFrigateView: View {
         UserDefaults.standard.set(username, forKey: frigateUsernameKey)
         UserDefaults.standard.set(go2rtcPublicUrl, forKey: frigateGo2rtcUrlKey)
         UserDefaults.standard.set(ignoreSSLErrors, forKey: frigateIgnoreSSLKey)
+        UserDefaults.standard.set(duplicateHandling.rawValue, forKey: frigateDuplicateHandlingKey)
     }
 }
 
