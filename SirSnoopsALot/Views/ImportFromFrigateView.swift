@@ -9,6 +9,11 @@ struct ImportFromFrigateView: View {
     @State private var frigatePort: String = "5000"
     @State private var useHTTPS: Bool = false
 
+    // Authentication (optional)
+    @State private var username: String = ""
+    @State private var password: String = ""
+    @State private var showAuthSection: Bool = false
+
     // UI state
     @State private var showCameraList: Bool = false
 
@@ -58,6 +63,20 @@ struct ImportFromFrigateView: View {
                 Text("Frigate Server Settings")
             } footer: {
                 Text("Enter your Frigate NVR server address (e.g., 192.168.1.100)")
+            }
+
+            Section {
+                DisclosureGroup("Authentication (Optional)", isExpanded: $showAuthSection) {
+                    TextField("Username", text: $username)
+                        .textContentType(.username)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    SecureField("Password", text: $password)
+                        .textContentType(.password)
+                }
+            } footer: {
+                Text("Required for Frigate instances with authentication enabled")
             }
 
             if let errorMessage = importer.errorMessage {
@@ -212,7 +231,13 @@ struct ImportFromFrigateView: View {
         }
 
         Task {
-            await importer.fetchCameras(host: frigateHost, port: port, useHTTPS: useHTTPS)
+            await importer.fetchCameras(
+                host: frigateHost,
+                port: port,
+                useHTTPS: useHTTPS,
+                username: username.isEmpty ? nil : username,
+                password: password.isEmpty ? nil : password
+            )
 
             // If successful, show camera list
             if !importer.discoveredCameras.isEmpty {

@@ -17,7 +17,9 @@ class FrigateImporter: ObservableObject {
     ///   - host: Frigate server hostname or IP address
     ///   - port: Frigate API port (default: 5000)
     ///   - useHTTPS: Whether to use HTTPS instead of HTTP
-    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false) async {
+    ///   - username: Optional username for HTTP Basic Authentication
+    ///   - password: Optional password for HTTP Basic Authentication
+    func fetchCameras(host: String, port: Int = 5000, useHTTPS: Bool = false, username: String? = nil, password: String? = nil) async {
         guard !host.isEmpty else {
             errorMessage = "Please enter a Frigate host address"
             return
@@ -40,6 +42,16 @@ class FrigateImporter: ObservableObject {
             var request = URLRequest(url: url)
             request.timeoutInterval = 10.0
             request.httpMethod = "GET"
+
+            // Add HTTP Basic Auth if credentials provided
+            if let username = username, let password = password {
+                let credentials = "\(username):\(password)"
+                if let credentialsData = credentials.data(using: .utf8) {
+                    let base64Credentials = credentialsData.base64EncodedString()
+                    request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+                    logger.debug("Added Basic Auth header for user: \(username)")
+                }
+            }
 
             // Execute request
             let (data, response) = try await URLSession.shared.data(for: request)
