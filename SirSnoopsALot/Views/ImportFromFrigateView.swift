@@ -38,13 +38,22 @@ struct ImportFromFrigateView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            ZStack {
                 if showCameraList {
                     cameraSelectionView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                 } else {
                     connectionFormView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
                 }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showCameraList)
             .navigationTitle("Import from Frigate")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -70,207 +79,406 @@ struct ImportFromFrigateView: View {
     // MARK: - Connection Form (Step 1)
 
     private var connectionFormView: some View {
-        Form {
-            Section {
-                TextField("Frigate URL", text: $frigateUrl)
-                    .textContentType(.URL)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .submitLabel(.done)
-                    .keyboardType(.URL)
-            } header: {
-                Text("Frigate Server")
-            } footer: {
-                Text("Enter your Frigate server URL (e.g., http://192.168.1.100:5000, https://frigate.example.com)")
-            }
+        ScrollView {
+            VStack(spacing: 24) {
+                // Frigate Server Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Frigate Server")
+                        .font(.headline)
+                        .foregroundColor(.primary)
 
-            Section {
-                DisclosureGroup("Authentication (Optional)", isExpanded: $showAuthSection) {
-                    TextField("Username", text: $username)
-                        .textContentType(.username)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-
-                    SecureField("Password", text: $password)
-                        .textContentType(.password)
-
-                    if passwordMissing {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.caption)
-                            Text("Password required when username is provided")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-            } footer: {
-                Text("Required for Frigate instances with authentication enabled")
-            }
-
-            Section {
-                DisclosureGroup("SSL Settings (Optional)", isExpanded: $showSSLSection) {
-                    Toggle("Ignore SSL Certificate Errors", isOn: $ignoreSSLErrors)
-
-                    if ignoreSSLErrors {
-                        HStack(spacing: 8) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.caption)
-                            Text("SSL certificate validation disabled. Only use this for trusted servers with self-signed or expired certificates.")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 4)
-                    }
-                }
-            } footer: {
-                Text("Enable this option if your Frigate server uses a self-signed or expired SSL certificate")
-            }
-
-            Section {
-                DisclosureGroup("go2rtc Public URL (Optional)", isExpanded: $showGo2rtcSection) {
-                    TextField("Public go2rtc base URL", text: $go2rtcPublicUrl)
+                    TextField("Frigate URL", text: $frigateUrl)
                         .textContentType(.URL)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
                         .submitLabel(.done)
-                }
-            } footer: {
-                Text("If using go2rtc restreams, enter the public URL (e.g., rtsp://frigate.example.com:8554). This replaces 127.0.0.1:8554 for remote access.")
-            }
+                        .keyboardType(.URL)
+                        .textFieldStyle(.roundedBorder)
+                        .padding(.horizontal, 4)
 
-            if let errorMessage = importer.errorMessage {
-                Section {
+                    Text("Enter your Frigate server URL (e.g., http://192.168.1.100:5000, https://frigate.example.com)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                }
+                .padding(20)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .hoverEffect()
+
+                // Authentication Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Button(action: { withAnimation { showAuthSection.toggle() } }) {
+                        HStack {
+                            Image(systemName: "person.badge.key")
+                                .font(.title3)
+                                .foregroundColor(.blue)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Authentication")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Optional")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showAuthSection ? 90 : 0))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if showAuthSection {
+                        VStack(spacing: 16) {
+                            TextField("Username", text: $username)
+                                .textContentType(.username)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                                .textFieldStyle(.roundedBorder)
+
+                            SecureField("Password", text: $password)
+                                .textContentType(.password)
+                                .textFieldStyle(.roundedBorder)
+
+                            if passwordMissing {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                    Text("Password required when username is provided")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            Text("Required for Frigate instances with authentication enabled")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 4)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .padding(20)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .hoverEffect()
+
+                // SSL Settings Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Button(action: { withAnimation { showSSLSection.toggle() } }) {
+                        HStack {
+                            Image(systemName: "lock.shield")
+                                .font(.title3)
+                                .foregroundColor(.green)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("SSL Settings")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Optional")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showSSLSection ? 90 : 0))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if showSSLSection {
+                        VStack(spacing: 16) {
+                            Toggle("Ignore SSL Certificate Errors", isOn: $ignoreSSLErrors)
+                                .toggleStyle(.switch)
+
+                            if ignoreSSLErrors {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                    Text("SSL certificate validation disabled. Only use this for trusted servers with self-signed or expired certificates.")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+
+                            Text("Enable this option if your Frigate server uses a self-signed or expired SSL certificate")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 4)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .padding(20)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .hoverEffect()
+
+                // go2rtc Settings Section
+                VStack(alignment: .leading, spacing: 12) {
+                    Button(action: { withAnimation { showGo2rtcSection.toggle() } }) {
+                        HStack {
+                            Image(systemName: "video.and.waveform")
+                                .font(.title3)
+                                .foregroundColor(.purple)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("go2rtc Public URL")
+                                    .font(.headline)
+                                    .foregroundColor(.primary)
+                                Text("Optional")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showGo2rtcSection ? 90 : 0))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    if showGo2rtcSection {
+                        VStack(spacing: 16) {
+                            TextField("Public go2rtc base URL", text: $go2rtcPublicUrl)
+                                .textContentType(.URL)
+                                .autocapitalization(.none)
+                                .disableAutocorrection(true)
+                                .submitLabel(.done)
+                                .textFieldStyle(.roundedBorder)
+
+                            Text("If using go2rtc restreams, enter the public URL (e.g., rtsp://frigate.example.com:8554). This replaces 127.0.0.1:8554 for remote access.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.horizontal, 4)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
+                }
+                .padding(20)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .hoverEffect()
+
+                // Error Message
+                if let errorMessage = importer.errorMessage {
                     HStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.title2)
                             .foregroundColor(.orange)
                         Text(errorMessage)
                             .font(.callout)
                             .foregroundColor(.primary)
                     }
-                    .padding(.vertical, 4)
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(.orange.opacity(0.3), lineWidth: 1)
+                    )
                 }
-            }
 
-            Section {
+                // Connect Button
                 Button(action: connectToFrigate) {
-                    HStack {
+                    HStack(spacing: 12) {
                         if importer.isLoading {
                             ProgressView()
                                 .progressViewStyle(.circular)
                         } else {
                             Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.title3)
                         }
                         Text(importer.isLoading ? "Connecting..." : "Connect to Frigate")
+                            .font(.headline)
                     }
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .disabled(frigateUrl.isEmpty || importer.isLoading)
             }
+            .padding(.horizontal, 32)
+            .padding(.vertical, 24)
         }
     }
 
     // MARK: - Camera Selection (Step 2)
 
     private var cameraSelectionView: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             // Camera list
-            List {
-                ForEach(importer.discoveredCameras.indices, id: \.self) { index in
-                    cameraRow(for: $importer.discoveredCameras[index])
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Header
+                    VStack(spacing: 8) {
+                        Text("Select Cameras")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                        Text("\(importer.discoveredCameras.count) cameras discovered")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 16)
+
+                    // Camera cards
+                    ForEach(importer.discoveredCameras.indices, id: \.self) { index in
+                        cameraCard(for: $importer.discoveredCameras[index])
+                    }
                 }
+                .padding(.horizontal, 32)
+                .padding(.vertical, 24)
+                .padding(.bottom, 100) // Space for bottom bar
             }
 
             // Bottom action bar
-            VStack(spacing: 12) {
+            VStack(spacing: 0) {
                 Divider()
 
-                HStack {
-                    Button("Back") {
-                        showCameraList = false
+                HStack(spacing: 20) {
+                    Button(action: { withAnimation { showCameraList = false } }) {
+                        HStack {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
                     }
+                    .buttonStyle(.bordered)
 
                     Spacer()
 
                     Text("\(selectedCameraCount) selected")
-                        .font(.callout)
+                        .font(.headline)
                         .foregroundColor(.secondary)
 
                     Spacer()
 
                     Button(action: importSelectedCameras) {
-                        Text("Import (\(selectedCameraCount))")
-                            .fontWeight(.semibold)
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("Import (\(selectedCameraCount))")
+                        }
                     }
                     .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                     .disabled(selectedCameraCount == 0)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 32)
+                .padding(.vertical, 20)
+                .background(.regularMaterial)
             }
-            .background(.regularMaterial)
         }
     }
 
-    private func cameraRow(for camera: Binding<FrigateCameraImportable>) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Checkbox
-            Button(action: {
-                if camera.wrappedValue.canImport {
+    private func cameraCard(for camera: Binding<FrigateCameraImportable>) -> some View {
+        Button(action: {
+            if camera.wrappedValue.canImport {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     camera.wrappedValue.isSelected.toggle()
                 }
-            }) {
-                Image(systemName: camera.wrappedValue.isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundColor(camera.wrappedValue.isSelected ? .blue : .gray)
             }
-            .buttonStyle(.plain)
-            .disabled(!camera.wrappedValue.canImport)
+        }) {
+            HStack(alignment: .top, spacing: 16) {
+                // Selection indicator
+                ZStack {
+                    Circle()
+                        .fill(camera.wrappedValue.isSelected ? Color.blue : Color.gray.opacity(0.2))
+                        .frame(width: 44, height: 44)
 
-            // Camera info
-            VStack(alignment: .leading, spacing: 6) {
-                Text(camera.wrappedValue.name)
-                    .font(.headline)
-
-                if let mainUrl = camera.wrappedValue.mainStreamUrl {
-                    streamUrlLabel("HD", url: mainUrl)
+                    Image(systemName: camera.wrappedValue.isSelected ? "checkmark" : "video")
+                        .font(.title3)
+                        .foregroundColor(camera.wrappedValue.isSelected ? .white : .gray)
                 }
 
-                if let subUrl = camera.wrappedValue.subStreamUrl {
-                    streamUrlLabel("SD", url: subUrl)
-                } else if camera.wrappedValue.mainStreamUrl != nil {
-                    Text("SD: (will use HD stream)")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .italic()
-                }
+                // Camera info
+                VStack(alignment: .leading, spacing: 12) {
+                    // Camera name
+                    Text(camera.wrappedValue.name)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
 
-                if let warning = camera.wrappedValue.warningMessage {
-                    HStack(spacing: 4) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.caption)
-                        Text(warning)
-                            .font(.caption)
+                    // Stream URLs
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let mainUrl = camera.wrappedValue.mainStreamUrl {
+                            streamUrlRow("HD Stream", url: mainUrl, color: .blue)
+                        }
+
+                        if let subUrl = camera.wrappedValue.subStreamUrl {
+                            streamUrlRow("SD Stream", url: subUrl, color: .green)
+                        } else if camera.wrappedValue.mainStreamUrl != nil {
+                            HStack(spacing: 6) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption)
+                                Text("SD will use HD stream")
+                                    .font(.caption)
+                            }
+                            .foregroundColor(.secondary)
+                        }
                     }
-                    .foregroundColor(.orange)
-                }
-            }
 
-            Spacer()
+                    // Warning if any
+                    if let warning = camera.wrappedValue.warningMessage {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.callout)
+                            Text(warning)
+                                .font(.callout)
+                        }
+                        .foregroundColor(.orange)
+                        .padding(.top, 4)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                        camera.wrappedValue.isSelected ? Color.blue.opacity(0.5) : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+            .scaleEffect(camera.wrappedValue.isSelected ? 1.0 : 0.98)
+            .opacity(camera.wrappedValue.canImport ? 1.0 : 0.5)
         }
-        .padding(.vertical, 4)
-        .opacity(camera.wrappedValue.canImport ? 1.0 : 0.5)
+        .buttonStyle(.plain)
+        .disabled(!camera.wrappedValue.canImport)
+        .hoverEffect()
     }
 
-    private func streamUrlLabel(_ label: String, url: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label + ":")
+    private func streamUrlRow(_ label: String, url: String, color: Color) -> some View {
+        HStack(spacing: 8) {
+            // Quality badge
+            Text(label.prefix(2))
                 .font(.caption2)
-                .foregroundColor(.secondary)
-                .fontWeight(.medium)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(color, in: RoundedRectangle(cornerRadius: 6))
+
+            // URL
             Text(obfuscateUrl(url))
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -290,7 +498,9 @@ struct ImportFromFrigateView: View {
     private func connectToFrigate() {
         // Parse the Frigate URL
         guard let (host, port, useHTTPS) = parseFrigateUrl(frigateUrl) else {
-            importer.errorMessage = "Invalid Frigate URL. Please enter a valid URL like http://192.168.1.100:5000 or https://frigate.example.com"
+            withAnimation {
+                importer.errorMessage = "Invalid Frigate URL. Please enter a valid URL like http://192.168.1.100:5000 or https://frigate.example.com"
+            }
             return
         }
 
@@ -308,9 +518,11 @@ struct ImportFromFrigateView: View {
                 ignoreSSLErrors: ignoreSSLErrors
             )
 
-            // If successful, show camera list
+            // If successful, show camera list with animation
             if !importer.discoveredCameras.isEmpty {
-                showCameraList = true
+                withAnimation {
+                    showCameraList = true
+                }
             }
         }
     }
