@@ -3,6 +3,7 @@ import SwiftUI
 struct CameraListView: View {
     @Binding var selectedCamera: CameraConfig?
     @State private var showingAddCamera = false
+    @State private var showingFrigateImport = false
     @StateObject private var cameraManager = CameraManager.shared
     @State private var isSortMode = false
     
@@ -31,13 +32,23 @@ struct CameraListView: View {
         .listStyle(.sidebar)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    showingAddCamera = true
-                }) {
+                Menu {
+                    Button(action: {
+                        showingAddCamera = true
+                    }) {
+                        Label("Add Manually", systemImage: "plus.circle")
+                    }
+
+                    Button(action: {
+                        showingFrigateImport = true
+                    }) {
+                        Label("Import from Frigate", systemImage: "arrow.down.doc")
+                    }
+                } label: {
                     Label("Add Camera", systemImage: "plus")
                 }
             }
-            
+
             ToolbarItem(placement: .primaryAction) {
                 Button(action: {
                     withAnimation {
@@ -50,6 +61,9 @@ struct CameraListView: View {
         }
         .sheet(isPresented: $showingAddCamera) {
             AddCameraView()
+        }
+        .sheet(isPresented: $showingFrigateImport) {
+            ImportFromFrigateView()
         }
         .environment(\.editMode, .constant(isSortMode ? .active : .inactive))
         .onChange(of: isSortMode) { _, newValue in
