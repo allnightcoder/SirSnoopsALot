@@ -76,7 +76,13 @@ final class CameraManager: ObservableObject {
         reorderCameras()
         saveCameras()
     }
-    
+
+    func deleteCameras(_ cameraIds: Set<UUID>) {
+        cameras.removeAll(where: { cameraIds.contains($0.id) })
+        reorderCameras()
+        saveCameras()
+    }
+
     func saveCameras() {
         do {
             let encodedData = try JSONEncoder().encode(cameras)

@@ -4,17 +4,32 @@ import UniformTypeIdentifiers
 struct CameraListItemView: View {
     let camera: CameraConfig
     let isInSortMode: Bool
+    let isInSelectionMode: Bool
+    let isSelected: Bool
+    let onToggleSelection: () -> Void
+
     @Environment(\.openWindow) private var openWindow
     @State private var showingEditCamera = false
     @State private var showingDeleteConfirmation = false
     @State private var cameraManager = CameraManager.shared
-    
+
     var body: some View {
-        VStack(alignment: .leading) {
-            Text(camera.name)
-                .font(.headline)
+        HStack(spacing: 12) {
+            // Selection checkbox (only visible in selection mode)
+            if isInSelectionMode {
+                Button(action: onToggleSelection) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(isSelected ? .blue : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading) {
+                Text(camera.name)
+                    .font(.headline)
                 .contextMenu(menuItems: {
-                    if !isInSortMode {
+                    if !isInSortMode && !isInSelectionMode {
                         Button(action: {
                             print("CameraListItemView - Attempting to open camera in new window: \(camera.name)")
                             openWindow(id: "floating", value: camera)
@@ -36,14 +51,16 @@ struct CameraListItemView: View {
                         }
                     }
                 })
-            Text(camera.description)
-                .font(.caption)
-                .foregroundColor(.gray)
-                .lineLimit(1)
+                Text(camera.description)
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .lineLimit(1)
+            }
         }
         .opacity(isInSortMode ? 0.8 : 1.0)
+        .background(isSelected && isInSelectionMode ? Color.blue.opacity(0.1) : Color.clear)
         .onDrag({
-            if isInSortMode { return NSItemProvider() }
+            if isInSortMode || isInSelectionMode { return NSItemProvider() }
             
             let userActivity = NSUserActivity(activityType: Activity.floatCamera)
             do {
