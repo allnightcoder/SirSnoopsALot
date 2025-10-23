@@ -5,7 +5,55 @@ import CoreGraphics
 /// Manages an HLS stream using FFmpeg with Bearer token authentication
 /// Based on RTSPStreamManager but simplified for HLS playback
 class HLSAuthStreamManager: ObservableObject {
+    enum StreamError: LocalizedError {
+        case failedToOpenInput(Int32)
+        case failedToFindStreamInfo
+        case noVideoStream
+        case failedToGetCodecParameters
+        case failedToFindDecoder
+        case failedToAllocateCodecContext
+        case failedToInitializeCodec
+        case endOfStream
+        case decodingFailed(Int32)
+        case frameReceiveFailed(Int32)
+
+        var errorDescription: String? {
+            switch self {
+            case .failedToOpenInput(let code):
+                return "Failed to open HLS stream (error \(code))"
+            case .failedToFindStreamInfo:
+                return "Failed to analyze stream information"
+            case .noVideoStream:
+                return "No video stream found in HLS"
+            case .failedToGetCodecParameters:
+                return "Failed to get video codec parameters"
+            case .failedToFindDecoder:
+                return "Video decoder not found"
+            case .failedToAllocateCodecContext:
+                return "Failed to allocate decoder context"
+            case .failedToInitializeCodec:
+                return "Failed to initialize video decoder"
+            case .endOfStream:
+                return "End of stream reached"
+            case .decodingFailed(let code):
+                return "Failed to send packet to decoder (error \(code))"
+            case .frameReceiveFailed(let code):
+                return "Failed to receive frame from decoder (error \(code))"
+            }
+        }
+    }
+
+    enum StreamState {
+        case idle
+        case preparing
+        case playing
+        case paused
+        case draining
+        case failed(StreamError)
+    }
+
     @Published var currentFrame: UIImage?
+    @Published private(set) var state: StreamState = .idle
 
     private(set) var currentStreamURL: String?
 
@@ -15,8 +63,16 @@ class HLSAuthStreamManager: ObservableObject {
     private var frame: UnsafeMutablePointer<AVFrame>?
     private var packet: UnsafeMutablePointer<AVPacket>?
 
-    private var isRunning = false
+    private var shouldKeepDecoding = false
     private var videoStreamIndex = Int32(-1)
+
+    // Pause/resume mechanism
+    private let decodeQueue = DispatchQueue(label: "HLSAuthStreamManager.decode", qos: .userInitiated)
+    private let pauseSemaphore = DispatchSemaphore(value: 0)
+    private var isPaused = false
+
+    // Thread synchronization
+    private let stateLock = NSLock()
 
     // Minimal logging flags
     private var didLogVTReady = false
@@ -29,13 +85,45 @@ class HLSAuthStreamManager: ObservableObject {
     func startStream(url: String, authToken: String) {
         DispatchQueue.main.async {
             self.currentStreamURL = url
+            self.state = .preparing
         }
 
         print("HLSAuthStreamManager - Starting HLS stream: \(url)")
-        openStream(url: url, authToken: authToken)
+
+        // Run openStream on decodeQueue to ensure all FFmpeg context access is thread-safe
+        decodeQueue.async { [weak self] in
+            self?.openStream(url: url, authToken: authToken)
+        }
     }
 
-    /// Stop the current stream
+    /// Pause the current stream (keeps contexts alive)
+    func pauseStream() {
+        guard case .playing = state else { return }
+
+        print("HLSAuthStreamManager - Pausing stream")
+        stateLock.lock()
+        isPaused = true
+        stateLock.unlock()
+        DispatchQueue.main.async {
+            self.state = .paused
+        }
+    }
+
+    /// Resume the paused stream
+    func resumeStream() {
+        guard case .paused = state else { return }
+
+        print("HLSAuthStreamManager - Resuming stream")
+        stateLock.lock()
+        isPaused = false
+        stateLock.unlock()
+        pauseSemaphore.signal()
+        DispatchQueue.main.async {
+            self.state = .playing
+        }
+    }
+
+    /// Stop the current stream and cleanup resources
     func stopStream() {
         guard currentStreamURL != nil else {
             print("HLSAuthStreamManager - Stop requested but no active stream")
@@ -43,16 +131,32 @@ class HLSAuthStreamManager: ObservableObject {
         }
 
         print("HLSAuthStreamManager - Stopping stream")
-        isRunning = false
+
+        // Thread-safe flag updates
+        stateLock.lock()
+        shouldKeepDecoding = false
+        let wasPaused = isPaused
+        stateLock.unlock()
+
+        // If paused, wake up the decode loop so it can exit
+        if wasPaused {
+            pauseSemaphore.signal()
+        }
 
         DispatchQueue.main.async {
             self.currentStreamURL = nil
+            self.state = .draining
         }
 
-        Thread.sleep(forTimeInterval: 0.2)
-        cleanupResources()
+        // Cleanup happens async on decode queue
+        decodeQueue.async { [weak self] in
+            self?.cleanupResources()
+            DispatchQueue.main.async {
+                self?.state = .idle
+            }
+        }
 
-        print("HLSAuthStreamManager - Stream stopped")
+        print("HLSAuthStreamManager - Stream stop initiated")
     }
 
     deinit {
@@ -77,6 +181,9 @@ class HLSAuthStreamManager: ObservableObject {
 
         guard openResult >= 0, let validCtx = formatContext else {
             print("HLSAuthStreamManager - ❌ Failed to open input: \(url), error: \(av_err2str(openResult))")
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToOpenInput(openResult))
+            }
             return
         }
         self.formatContext = validCtx
@@ -85,6 +192,9 @@ class HLSAuthStreamManager: ObservableObject {
         guard avformat_find_stream_info(validCtx, nil) >= 0 else {
             print("HLSAuthStreamManager - ❌ avformat_find_stream_info failed")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToFindStreamInfo)
+            }
             return
         }
         print("HLSAuthStreamManager - ✅ Found stream info")
@@ -102,6 +212,9 @@ class HLSAuthStreamManager: ObservableObject {
         guard videoStreamIndex != -1 else {
             print("HLSAuthStreamManager - ❌ No video stream found")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.noVideoStream)
+            }
             return
         }
         print("HLSAuthStreamManager - Found video stream at index: \(videoStreamIndex)")
@@ -109,6 +222,9 @@ class HLSAuthStreamManager: ObservableObject {
         guard let codecParams = validCtx.pointee.streams[Int(videoStreamIndex)]?.pointee.codecpar else {
             print("HLSAuthStreamManager - ❌ Failed to get codec parameters")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToGetCodecParameters)
+            }
             return
         }
 
@@ -123,6 +239,9 @@ class HLSAuthStreamManager: ObservableObject {
         guard let codec = avcodec_find_decoder(codecParams.pointee.codec_id) else {
             print("HLSAuthStreamManager - ❌ Failed to find decoder")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToFindDecoder)
+            }
             return
         }
 
@@ -130,12 +249,18 @@ class HLSAuthStreamManager: ObservableObject {
         guard let codecCtx = codecContext else {
             print("HLSAuthStreamManager - ❌ Failed to alloc codec context")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToAllocateCodecContext)
+            }
             return
         }
 
         guard avcodec_parameters_to_context(codecCtx, codecParams) >= 0 else {
             print("HLSAuthStreamManager - ❌ Failed avcodec_parameters_to_context")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToInitializeCodec)
+            }
             return
         }
 
@@ -149,6 +274,9 @@ class HLSAuthStreamManager: ObservableObject {
         guard avcodec_open2(codecCtx, codec, nil) >= 0 else {
             print("HLSAuthStreamManager - ❌ Failed avcodec_open2")
             cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .failed(.failedToInitializeCodec)
+            }
             return
         }
 
@@ -157,21 +285,57 @@ class HLSAuthStreamManager: ObservableObject {
         packet = av_packet_alloc()
 
         print("HLSAuthStreamManager - ✅ Stream opened successfully, starting decode loop")
-        isRunning = true
+
+        // Thread-safe flag update
+        stateLock.lock()
+        shouldKeepDecoding = true
+        stateLock.unlock()
+
+        DispatchQueue.main.async {
+            self.state = .playing
+        }
         startDecodingLoop()
     }
 
     // MARK: - Decode Loop
 
     private func startDecodingLoop() {
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        decodeQueue.async { [weak self] in
             guard let self = self else { return }
 
-            while self.isRunning {
-                if !self.readNextFrame() {
-                    Thread.sleep(forTimeInterval: 0.1)
+            while true {
+                // Thread-safe check of decode flag
+                self.stateLock.lock()
+                let shouldContinue = self.shouldKeepDecoding
+                let paused = self.isPaused
+                self.stateLock.unlock()
+
+                if !shouldContinue { break }
+
+                // Handle pause
+                if paused {
+                    self.pauseSemaphore.wait()
+                    // Re-check after waking from pause
+                    self.stateLock.lock()
+                    let stillDecoding = self.shouldKeepDecoding
+                    self.stateLock.unlock()
+                    if !stillDecoding { break }
+                    continue
                 }
-                Thread.sleep(forTimeInterval: 0.033) // ~30fps
+
+                if !self.readNextFrame() {
+                    // No frame available, wait before retrying
+                    usleep(useconds_t(33_000)) // 33ms
+                } else {
+                    // Frame decoded, pace at ~30fps
+                    usleep(useconds_t(33_000)) // 33ms
+                }
+            }
+
+            print("HLSAuthStreamManager - Decode loop exited, cleaning up")
+            self.cleanupResources()
+            DispatchQueue.main.async {
+                self.state = .idle
             }
         }
     }
@@ -187,8 +351,13 @@ class HLSAuthStreamManager: ObservableObject {
         let readResult = av_read_frame(formatContext, packet)
         if readResult < 0 {
             if readResult == AVERROR_EOF {
-                print("HLSAuthStreamManager - End of stream")
-                stopStream()
+                print("HLSAuthStreamManager - End of stream reached")
+                stateLock.lock()
+                shouldKeepDecoding = false
+                stateLock.unlock()
+                DispatchQueue.main.async {
+                    self.state = .draining
+                }
             }
             return false
         }
@@ -199,8 +368,17 @@ class HLSAuthStreamManager: ObservableObject {
             return true
         }
 
-        guard avcodec_send_packet(codecContext, packet) >= 0 else {
-            av_packet_unref(packet)
+        let sendResult = avcodec_send_packet(codecContext, packet)
+        av_packet_unref(packet)
+
+        if sendResult < 0 && sendResult != AVERROR(EAGAIN) {
+            print("HLSAuthStreamManager - ❌ avcodec_send_packet failed: \(av_err2str(sendResult))")
+            stateLock.lock()
+            shouldKeepDecoding = false
+            stateLock.unlock()
+            DispatchQueue.main.async {
+                self.state = .failed(.decodingFailed(sendResult))
+            }
             return false
         }
 
@@ -226,9 +404,19 @@ class HLSAuthStreamManager: ObservableObject {
                 }
                 convertFrameToImage(frame)
             }
+            return true
+        } else if receiveResult != AVERROR(EAGAIN) && receiveResult != AVERROR_EOF {
+            // Fatal decode error (not EAGAIN which is normal)
+            print("HLSAuthStreamManager - ❌ avcodec_receive_frame failed: \(av_err2str(receiveResult))")
+            stateLock.lock()
+            shouldKeepDecoding = false
+            stateLock.unlock()
+            DispatchQueue.main.async {
+                self.state = .failed(.frameReceiveFailed(receiveResult))
+            }
+            return false
         }
 
-        av_packet_unref(packet)
         return true
     }
 

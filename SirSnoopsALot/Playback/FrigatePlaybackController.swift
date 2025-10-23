@@ -13,9 +13,10 @@ class FrigatePlaybackController: NSObject, ObservableObject {
     @Published private(set) var error: String?
 
     private let authService: FrigateAuthService
-    private var streamManager: HLSAuthStreamManager?
+    private(set) var streamManager: HLSAuthStreamManager?
     private var playbackStartAnchor: Date?
     private var frameObserver: AnyCancellable?
+    private var stateObserver: AnyCancellable?
 
     init(authService: FrigateAuthService) {
         self.authService = authService
@@ -42,6 +43,25 @@ class FrigatePlaybackController: NSObject, ObservableObject {
                 self?.currentFrame = frame
             }
 
+        // Observe state changes
+        stateObserver = manager.$state
+            .sink { [weak self] state in
+                switch state {
+                case .preparing:
+                    self?.isBuffering = true
+                case .playing:
+                    self?.isBuffering = false
+                    self?.error = nil
+                case .paused, .idle:
+                    self?.isBuffering = false
+                case .draining:
+                    self?.isBuffering = false
+                case .failed(let err):
+                    self?.error = err.localizedDescription
+                    self?.isBuffering = false
+                }
+            }
+
         playbackStartAnchor = startTime
         currentTime = startTime
         error = nil
@@ -61,18 +81,21 @@ class FrigatePlaybackController: NSObject, ObservableObject {
     }
 
     func play() {
-        // Note: HLSAuthStreamManager auto-starts playback
-        // This method kept for API compatibility
+        if let manager = streamManager {
+            // Resume if manager exists
+            manager.resumeStream()
+        }
+        // Note: For initial playback, loadVOD creates and starts the manager
     }
 
     func pause() {
-        streamManager?.stopStream()
+        streamManager?.pauseStream()
     }
 
     func stop() {
         streamManager?.stopStream()
-        streamManager = nil
+        // Don't nil out streamManager immediately - let it transition to .idle first
+        // It will be replaced on next loadVOD call
         currentTime = nil
-        currentFrame = nil
     }
 }

@@ -190,8 +190,12 @@ struct HistoricalFrigateView: View {
                 SimpleTimelineView(
                     segments: store.timelineSegments,
                     range: store.selectedRange,
+                    previewFrame: store.playbackController.currentFrame,
                     onSelectTime: { time in
                         store.play(from: time)
+                    },
+                    onScrubTime: { time in
+                        store.scrub(to: time)
                     }
                 )
             }
@@ -315,7 +319,13 @@ struct DateRangePicker: View {
 struct SimpleTimelineView: View {
     let segments: [TimelineSegment]
     let range: DateInterval
+    let previewFrame: UIImage?
     let onSelectTime: (Date) -> Void
+    let onScrubTime: ((Date) -> Void)?
+
+    @State private var scrubbingTime: Date?
+    @State private var isDragging = false
+    @AppStorage("showTimelineScrubPreview") private var showPreview = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -329,12 +339,58 @@ struct SimpleTimelineView: View {
                     // Segments
                     ForEach(segments) { segment in
                         SegmentView(segment: segment, range: range, totalWidth: max(geometry.size.width, totalWidth))
-                            .onTapGesture {
-                                onSelectTime(segment.startTime)
-                            }
+                    }
+
+                    // Scrubbing indicator
+                    if let scrubbingTime = scrubbingTime {
+                        let offset = timeToOffset(scrubbingTime, totalWidth: max(geometry.size.width, totalWidth))
+                        Rectangle()
+                            .fill(Color.red.opacity(0.7))
+                            .frame(width: 3, height: 100)
+                            .offset(x: offset)
                     }
                 }
                 .frame(width: max(geometry.size.width, totalWidth), height: 100)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            let time = locationToTime(value.location, in: geometry, totalWidth: max(geometry.size.width, totalWidth))
+                            scrubbingTime = time
+                            // Update preview during scrub
+                            onScrubTime?(time)
+                        }
+                        .onEnded { value in
+                            isDragging = false
+                            if let time = scrubbingTime {
+                                onSelectTime(time)
+                            }
+                            scrubbingTime = nil
+                        }
+                )
+            }
+
+            // Timestamp and preview overlay during scrubbing
+            if isDragging, let scrubbingTime = scrubbingTime {
+                VStack(spacing: 8) {
+                    // Preview frame (when enabled)
+                    if showPreview, let previewFrame = previewFrame {
+                        Image(uiImage: previewFrame)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 200, maxHeight: 150)
+                            .cornerRadius(8)
+                            .shadow(radius: 4)
+                    }
+
+                    // Timestamp
+                    Text(formatTimestamp(scrubbingTime))
+                        .font(.caption)
+                        .padding(8)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.top, 8)
             }
         }
         .padding(.horizontal)
@@ -342,6 +398,25 @@ struct SimpleTimelineView: View {
 
     private var totalWidth: CGFloat {
         1000 // Minimum width for scrollable timeline
+    }
+
+    private func locationToTime(_ location: CGPoint, in geometry: GeometryProxy, totalWidth: CGFloat) -> Date {
+        let normalizedX = max(0, min(1, location.x / totalWidth))
+        let timeOffset = normalizedX * range.duration
+        return range.start.addingTimeInterval(timeOffset)
+    }
+
+    private func timeToOffset(_ time: Date, totalWidth: CGFloat) -> CGFloat {
+        let timeOffset = time.timeIntervalSince(range.start)
+        let normalizedOffset = timeOffset / range.duration
+        return normalizedOffset * totalWidth
+    }
+
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
     }
 }
 

@@ -53,21 +53,8 @@ class HistoricalFrigateStore: ObservableObject {
         )
         self.playbackController = FrigatePlaybackController(authService: authService)
 
-        // Subscribe to playback controller's current time updates
-        playbackTimeObserver = playbackController.$currentTime
-            .compactMap { $0 }
-            .sink { [weak self] time in
-                guard let self = self else { return }
-
-                // Update playback state with live time
-                if case .playing = self.playbackState {
-                    self.playbackState = .playing(currentTime: time)
-                } else if case .paused = self.playbackState {
-                    self.playbackState = .paused(currentTime: time)
-                } else if case .buffering = self.playbackState {
-                    self.playbackState = .buffering(currentTime: time)
-                }
-            }
+        // Subscribe to playback controller's state via stream manager
+        // This will be set up when playback starts since manager is created on-demand
 
         // Start authentication
         Task {
@@ -139,8 +126,31 @@ class HistoricalFrigateStore: ObservableObject {
                 // Load and play
                 playbackState = .loading
                 try await playbackController.loadVOD(url: vodURL, startTime: time)
-                playbackState = .playing(currentTime: time)
 
+                // Always rewire subscription to the new manager (cancel any previous)
+                playbackTimeObserver?.cancel()
+                if let manager = playbackController.streamManager {
+                    playbackTimeObserver = manager.$state
+                        .combineLatest(playbackController.$currentTime.compactMap { $0 })
+                        .sink { [weak self] state, time in
+                            guard let self = self else { return }
+
+                            switch state {
+                            case .preparing, .draining:
+                                self.playbackState = .loading
+                            case .playing:
+                                self.playbackState = .playing(currentTime: time)
+                            case .paused:
+                                self.playbackState = .paused(currentTime: time)
+                            case .idle:
+                                self.playbackState = .idle
+                            case .failed(let error):
+                                self.playbackState = .error(error.localizedDescription)
+                            }
+                        }
+                }
+
+                // Initial state will be set by the publisher above
                 logger.info("Started playback from \(time)")
             } catch {
                 playbackState = .error(error.localizedDescription)
@@ -152,24 +162,24 @@ class HistoricalFrigateStore: ObservableObject {
 
     /// Pause playback
     func pause() {
-        if case .playing(let time) = playbackState {
+        if case .playing = playbackState {
             playbackController.pause()
-            playbackState = .paused(currentTime: time)
+            // State will update via publisher
         }
     }
 
     /// Resume playback
     func resume() {
-        if case .paused(let time) = playbackState {
+        if case .paused = playbackState {
             playbackController.play()
-            playbackState = .playing(currentTime: time)
+            // State will update via publisher
         }
     }
 
     /// Stop playback
     func stop() {
         playbackController.stop()
-        playbackState = .idle
+        // State will update via publisher
     }
 
     /// Scrub to a specific time
