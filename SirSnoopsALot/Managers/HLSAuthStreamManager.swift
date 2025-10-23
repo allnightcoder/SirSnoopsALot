@@ -2,6 +2,9 @@ import Foundation
 import UIKit
 import CoreGraphics
 
+// FFmpeg constant for invalid/undefined timestamp
+private let AV_NOPTS_VALUE: Int64 = Int64(bitPattern: 0x8000000000000000)
+
 /// Manages an HLS stream using FFmpeg with Bearer token authentication
 /// Based on RTSPStreamManager but simplified for HLS playback
 class HLSAuthStreamManager: ObservableObject {
@@ -53,6 +56,7 @@ class HLSAuthStreamManager: ObservableObject {
     }
 
     @Published var currentFrame: UIImage?
+    @Published private(set) var currentFrameTimestamp: TimeInterval? // Added for time tracking
     @Published private(set) var state: StreamState = .idle
 
     private(set) var currentStreamURL: String?
@@ -348,79 +352,109 @@ class HLSAuthStreamManager: ObservableObject {
             return false
         }
 
+        // Read a packet from the stream
         let readResult = av_read_frame(formatContext, packet)
         if readResult < 0 {
             if readResult == AVERROR_EOF {
-                print("HLSAuthStreamManager - End of stream reached")
+                print("HLSAuthStreamManager - End of stream, flushing decoder")
+                // Flush the decoder by sending a null packet
+                sendPacketToDecoder(nil)
                 stateLock.lock()
-                shouldKeepDecoding = false
+                shouldKeepDecoding = false // Stop after flushing
                 stateLock.unlock()
                 DispatchQueue.main.async {
                     self.state = .draining
                 }
+            } else {
+                print("HLSAuthStreamManager - ❌ av_read_frame failed: \(av_err2str(readResult))")
             }
             return false
         }
 
-        // Only process video packets
-        if packet.pointee.stream_index != self.videoStreamIndex {
-            av_packet_unref(packet)
-            return true
+        // Process only video packets
+        if packet.pointee.stream_index == self.videoStreamIndex {
+            sendPacketToDecoder(packet)
         }
 
-        let sendResult = avcodec_send_packet(codecContext, packet)
+        // Always unref the packet after sending
         av_packet_unref(packet)
 
-        if sendResult < 0 && sendResult != AVERROR(EAGAIN) {
-            print("HLSAuthStreamManager - ❌ avcodec_send_packet failed: \(av_err2str(sendResult))")
-            stateLock.lock()
-            shouldKeepDecoding = false
-            stateLock.unlock()
-            DispatchQueue.main.async {
-                self.state = .failed(.decodingFailed(sendResult))
-            }
-            return false
-        }
-
-        let receiveResult = avcodec_receive_frame(codecContext, frame)
-        if receiveResult >= 0 {
-            // Handle hardware-decoded frames
-            if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
-                if !didLogVTActive {
-                    print("HLSAuthStreamManager - Using VideoToolbox hardware decoding")
-                    didLogVTActive = true
-                }
-                if let swFrame = av_frame_alloc() {
-                    if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
-                        convertFrameToImage(swFrame)
-                    }
-                    var tmp: UnsafeMutablePointer<AVFrame>? = swFrame
-                    av_frame_free(&tmp)
-                }
-            } else {
-                if !didLogSWActive {
-                    print("HLSAuthStreamManager - Using software decoding")
-                    didLogSWActive = true
-                }
-                convertFrameToImage(frame)
-            }
-            return true
-        } else if receiveResult != AVERROR(EAGAIN) && receiveResult != AVERROR_EOF {
-            // Fatal decode error (not EAGAIN which is normal)
-            print("HLSAuthStreamManager - ❌ avcodec_receive_frame failed: \(av_err2str(receiveResult))")
-            stateLock.lock()
-            shouldKeepDecoding = false
-            stateLock.unlock()
-            DispatchQueue.main.async {
-                self.state = .failed(.frameReceiveFailed(receiveResult))
-            }
-            return false
-        }
-
+        // A frame was read, even if it wasn't a video frame
         return true
     }
 
+    private func sendPacketToDecoder(_ packet: UnsafeMutablePointer<AVPacket>?) {
+        guard let codecContext = codecContext, let frame = frame else { return }
+
+        // Send the packet to the decoder
+        let sendResult = avcodec_send_packet(codecContext, packet)
+        if sendResult < 0 {
+            print("HLSAuthStreamManager - ❌ avcodec_send_packet failed: \(av_err2str(sendResult))")
+            return
+        }
+
+        // Loop to receive all available frames from the decoder
+        while true {
+            let receiveResult = avcodec_receive_frame(codecContext, frame)
+            if receiveResult == AVERROR(EAGAIN) || receiveResult == AVERROR_EOF {
+                // EAGAIN: Decoder needs more data
+                // EOF: Decoder is fully flushed
+                break
+            } else if receiveResult < 0 {
+                // A real error occurred
+                print("HLSAuthStreamManager - ❌ avcodec_receive_frame failed: \(av_err2str(receiveResult))")
+                stateLock.lock()
+                shouldKeepDecoding = false
+                stateLock.unlock()
+                DispatchQueue.main.async {
+                    self.state = .failed(.frameReceiveFailed(receiveResult))
+                }
+                break
+            }
+
+            // Successfully received a frame, process it
+            processDecodedFrame(frame)
+        }
+    }
+
     // MARK: - Frame Conversion (copied from RTSPStreamManager)
+
+    private func processDecodedFrame(_ frame: UnsafeMutablePointer<AVFrame>) {
+        // Calculate timestamp in seconds
+        let pts = frame.pointee.best_effort_timestamp
+        if pts != AV_NOPTS_VALUE,
+           let videoStream = formatContext?.pointee.streams[Int(videoStreamIndex)] {
+            let timebase = videoStream.pointee.time_base
+            let timestampInSeconds = Double(pts) * Double(timebase.num) / Double(timebase.den)
+
+            DispatchQueue.main.async {
+                self.currentFrameTimestamp = timestampInSeconds
+            }
+        }
+
+        // Handle hardware-decoded frames
+        if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
+            if !didLogVTActive {
+                print("HLSAuthStreamManager - Using VideoToolbox hardware decoding")
+                didLogVTActive = true
+            }
+            if let swFrame = av_frame_alloc() {
+                defer {
+                    var tmp: UnsafeMutablePointer<AVFrame>? = swFrame
+                    av_frame_free(&tmp)
+                }
+                if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
+                    convertFrameToImage(swFrame)
+                }
+            }
+        } else {
+            if !didLogSWActive {
+                print("HLSAuthStreamManager - Using software decoding")
+                didLogSWActive = true
+            }
+            convertFrameToImage(frame)
+        }
+    }
 
     private func convertFrameToImage(_ frame: UnsafeMutablePointer<AVFrame>) {
         let width = Int(frame.pointee.width)

@@ -117,10 +117,9 @@ class HistoricalFrigateStore: ObservableObject {
                     return
                 }
 
-                // Build VOD URL for a reasonable window around the selected time
-                // Use 1 hour window centered on the selected time
-                let windowStart = time.addingTimeInterval(-30 * 60)
-                let windowEnd = time.addingTimeInterval(30 * 60)
+                // Build VOD URL for a reasonable window starting from the selected time
+                let windowStart = time
+                let windowEnd = time.addingTimeInterval(3600) // 1 hour window
                 let vodURL = await recordingService.buildVODURL(start: windowStart, end: windowEnd)
 
                 // Load and play

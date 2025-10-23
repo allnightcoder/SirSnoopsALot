@@ -16,6 +16,7 @@ class FrigatePlaybackController: NSObject, ObservableObject {
     private(set) var streamManager: HLSAuthStreamManager?
     private var playbackStartAnchor: Date?
     private var frameObserver: AnyCancellable?
+    private var timestampObserver: AnyCancellable?
     private var stateObserver: AnyCancellable?
 
     init(authService: FrigateAuthService) {
@@ -41,6 +42,15 @@ class FrigatePlaybackController: NSObject, ObservableObject {
             .compactMap { $0 }
             .sink { [weak self] frame in
                 self?.currentFrame = frame
+            }
+
+        // Observe timestamps to update currentTime
+        timestampObserver = manager.$currentFrameTimestamp
+            .compactMap { $0 }
+            .sink { [weak self] timestamp in
+                guard let self = self, let anchor = self.playbackStartAnchor else { return }
+                // The timestamp from FFmpeg is relative to the beginning of the stream
+                self.currentTime = anchor.addingTimeInterval(timestamp)
             }
 
         // Observe state changes
