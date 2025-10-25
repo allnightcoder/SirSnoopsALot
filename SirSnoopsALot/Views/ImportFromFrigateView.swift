@@ -47,7 +47,6 @@ struct ImportFromFrigateView: View {
     private let frigateUsernameKey = "frigate_last_username"
     private let frigateGo2rtcUrlKey = "frigate_last_go2rtc_url"
     private let frigateIgnoreSSLKey = "frigate_last_ignore_ssl"
-    private let frigateDuplicateHandlingKey = "frigate_duplicate_handling"
 
     // Computed property to check if password is missing when username exists
     private var passwordMissing: Bool {
@@ -682,12 +681,6 @@ struct ImportFromFrigateView: View {
         go2rtcPublicUrl = UserDefaults.standard.string(forKey: frigateGo2rtcUrlKey) ?? ""
         ignoreSSLErrors = UserDefaults.standard.bool(forKey: frigateIgnoreSSLKey)
 
-        // Load duplicate handling preference
-        if let savedHandling = UserDefaults.standard.string(forKey: frigateDuplicateHandlingKey),
-           let handling = DuplicateHandling(rawValue: savedHandling) {
-            duplicateHandling = handling
-        }
-
         // Auto-expand sections if values are present
         if !username.isEmpty {
             showAuthSection = true
@@ -698,9 +691,6 @@ struct ImportFromFrigateView: View {
         if ignoreSSLErrors {
             showSSLSection = true
         }
-        if duplicateHandling == .overwrite {
-            showDuplicateSection = true
-        }
     }
 
     /// Saves current settings to UserDefaults (except password)
@@ -709,7 +699,6 @@ struct ImportFromFrigateView: View {
         UserDefaults.standard.set(username, forKey: frigateUsernameKey)
         UserDefaults.standard.set(go2rtcPublicUrl, forKey: frigateGo2rtcUrlKey)
         UserDefaults.standard.set(ignoreSSLErrors, forKey: frigateIgnoreSSLKey)
-        UserDefaults.standard.set(duplicateHandling.rawValue, forKey: frigateDuplicateHandlingKey)
     }
 }
 
