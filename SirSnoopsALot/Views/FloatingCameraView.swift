@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct FloatingCameraView: View {
+    private let windowID = UUID()
     @State private var camera: CameraConfig?
     @Environment(\.dismissWindow) private var dismissWindow
+    @Environment(\.openWindow) private var openWindow
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var streamManager = RTSPStreamManager()
     @AppStorage("showFloatingControls") private var showFloatingControls = false
@@ -29,6 +31,9 @@ struct FloatingCameraView: View {
         .aspectRatio(contentMode: .fit)
         .navigationTitle(camera?.name ?? "")
         .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                SceneTracker.markFloatingOpened(id: windowID)
+            }
             print("FloatingCameraView - Scene phase changed from \(oldPhase) to \(newPhase)")
             print("FloatingCameraView - Current camera state: \(camera?.name ?? "nil")")
             
@@ -46,6 +51,7 @@ struct FloatingCameraView: View {
             case .background:
                 print("FloatingCameraView - Window entering background, stopping stream for camera: \(camera?.name ?? "Unknown")")
                 streamManager.stopStream()
+                handleFloatingClosedIfNeeded()
             default:
                 break
             }
@@ -54,8 +60,10 @@ struct FloatingCameraView: View {
             print("FloatingCameraView - View disappearing for camera: \(camera?.name ?? "Unknown")")
             streamManager.stopStream()
             print("FloatingCameraView - Stream stop completed")
+            handleFloatingClosedIfNeeded()
         }
         .onAppear() {
+            SceneTracker.markFloatingOpened(id: windowID)
             if let validCamera = camera {
                 streamManager.startStream(url: validCamera.url, initialInfo: validCamera.streamInfo) { updatedStreamInfo in
                     CameraManager.shared.updateStreamInfo(validCamera, isHighRes: validCamera.showHighRes, streamInfo: updatedStreamInfo)
@@ -72,6 +80,26 @@ struct FloatingCameraView: View {
             }
             else {
                 print("FloatingCameraView - bad drag data.")
+            }
+        }
+#if os(macOS)
+        .background(WindowObserver(
+            onWindowAttached: { _ in
+                SceneTracker.markFloatingOpened(id: windowID)
+            },
+            onWindowClosed: {
+                print("FloatingCameraView - NSWindow will close for camera: \(camera?.name ?? "Unknown")")
+                handleFloatingClosedIfNeeded()
+            }
+        ))
+#endif
+    }
+    
+    private func handleFloatingClosedIfNeeded() {
+        if SceneTracker.markFloatingClosed(id: windowID) {
+            print("FloatingCameraView - Last floating window closed, reopening main window")
+            DispatchQueue.main.async {
+                openWindow(id: "main")
             }
         }
     }

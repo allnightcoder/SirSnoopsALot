@@ -67,6 +67,10 @@ struct CameraStreamView: View {
         }
         .onDisappear {
             logger.info("CameraStreamView - disappeared")
+            if selectedCamera != nil {
+                logger.debug("CameraStreamView - Clearing selected camera reference on disappear")
+            }
+            selectedCamera = nil
         }
         .dropDestination(for: CameraConfig.self) { items, location in
             if let camera = items.first {

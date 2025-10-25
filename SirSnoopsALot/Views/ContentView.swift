@@ -39,6 +39,7 @@ struct ContentView: View {
             )
         }
         .onAppear {
+            SceneTracker.markMainOpened()
             selectedCamera = cameraManager.cameras.first
         }
         .onChange(of: scenePhase) { oldPhase, newPhase in
@@ -69,6 +70,7 @@ struct ContentView: View {
         }
         .onDisappear {
             print("ContentView - Disappearing, stopping stream")
+            SceneTracker.markMainClosed()
             streamManager.stopStream()
         }
         .ornament(visibility: .visible, attachmentAnchor: .scene(.topTrailing)) {

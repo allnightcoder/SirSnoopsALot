@@ -2,6 +2,41 @@
 
 import SwiftUI
 
+@MainActor
+enum SceneTracker {
+    private(set) static var mainIsOpen = false
+    private static var floatingWindowIDs: Set<UUID> = []
+
+    static func markMainOpened() {
+        mainIsOpen = true
+        print("SceneTracker - Main window opened")
+    }
+
+    static func markMainClosed() {
+        mainIsOpen = false
+        print("SceneTracker - Main window closed")
+    }
+
+    static func markFloatingOpened(id: UUID) {
+        let (inserted, _) = floatingWindowIDs.insert(id)
+        if inserted {
+            print("SceneTracker - Floating windows active: \(floatingWindowIDs.count)")
+        } else {
+            print("SceneTracker - Floating window \(id) already tracked; active count: \(floatingWindowIDs.count)")
+        }
+    }
+
+    static func markFloatingClosed(id: UUID) -> Bool {
+        let removed = floatingWindowIDs.remove(id) != nil
+        if removed {
+            print("SceneTracker - Floating windows active after close: \(floatingWindowIDs.count)")
+        } else {
+            print("SceneTracker - Attempted to close untracked floating window \(id); active count: \(floatingWindowIDs.count)")
+        }
+        return floatingWindowIDs.isEmpty && !mainIsOpen
+    }
+}
+
 
 #Preview {
     let app = SirSnoopsALotApp()
@@ -68,4 +103,3 @@ struct SirSnoopsALotApp: App {
         }
     }
 }
-
