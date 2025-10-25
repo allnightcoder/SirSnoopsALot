@@ -2,12 +2,6 @@ import Foundation
 import UIKit
 import CoreGraphics
 
-// MARK: - FFmpeg Imports & Constants
-let AVERROR_EOF: Int32 = -541478725  // -MKTAG('E','O','F',' ')
-func AVERROR(_ errno: Int32) -> Int32 {
-    return -errno
-}
-
 // Helper function since av_err2str is a macro in C
 func av_err2str(_ errnum: Int32) -> String {
     var buffer = [Int8](repeating: 0, count: 64)
@@ -24,93 +18,106 @@ enum RTSPTransport: String {
 
 /// Manages an RTSP stream using FFmpeg, with a fallback mechanism to skip or reduce analysis
 /// if we have cached info, but revert to a full parse if that fails.
-class RTSPStreamManager: ObservableObject {
+final class RTSPStreamManager: ObservableObject {
     @Published var currentFrame: UIImage?
-    
-    /// Current active RTSP URL (if streaming). Set when stream is started.
+
+    private struct StreamParameters {
+        let url: String
+        let transport: RTSPTransport
+        let useHWAccel: Bool
+    }
+
     private(set) var currentStreamURL: String?
-    
-    // Internal FFmpeg contexts & state
+
+    private let ffQueue = DispatchQueue(label: "com.sirsnoopsalot.rtsp.ffmpeg.serial", qos: .userInitiated)
+    private let stateQueue = DispatchQueue(label: "com.sirsnoopsalot.rtsp.state", attributes: .concurrent)
+
+    private var loopGroup = DispatchGroup()
+    private var abortFlag = FFAbort(flag: 0)
+
+    private var streamParameters: StreamParameters?
     private var formatContext: UnsafeMutablePointer<AVFormatContext>?
     private var codecContext: UnsafeMutablePointer<AVCodecContext>?
-    private var frame: UnsafeMutablePointer<AVFrame>?
-    private var packet: UnsafeMutablePointer<AVPacket>?
-    
-    private var isRunning = false
-    private var videoStreamIndex = Int32(-1)
-    
-    // Called when we discover or reaffirm new RTSP info
-    private var onStreamInfoUpdate: ((RTSPInfo?) -> Void)?
-    
-    // If you want to trigger fallback after some number of early decode failures:
+    private var videoStreamIndex: Int32 = -1
+    private var isDecoding = false
+
+    private var cachedRTSPInfo: RTSPInfo?
+    private var fallbackAllowed = true
     private var decodeFailureCount = 0
     private let maxEarlyFailuresBeforeFallback = 5
-    
-    // Used for fallback logic
-    private var fallbackAllowed = true
-    
-    // Cache of previously known RTSP info. If non-nil, we attempt an "aggressive" approach.
-    private var cachedRTSPInfo: RTSPInfo?
 
-    // Minimal logging flags
+    private var onStreamInfoUpdate: ((RTSPInfo?) -> Void)?
+
     private var didLogVTReady = false
     private var didLogVTActive = false
     private var didLogSWActive = false
-    
+
+    private var _pendingRestartAfterLoop = false
+    private var _shouldStopCompletely = false
+
+    private func setPendingRestart(_ value: Bool) {
+        stateQueue.sync(flags: .barrier) {
+            self._pendingRestartAfterLoop = value
+        }
+    }
+
+    private func getPendingRestart() -> Bool {
+        stateQueue.sync { _pendingRestartAfterLoop }
+    }
+
+    private func setShouldStopCompletely(_ value: Bool) {
+        stateQueue.sync(flags: .barrier) {
+            self._shouldStopCompletely = value
+        }
+    }
+
+    private func getShouldStopCompletely() -> Bool {
+        stateQueue.sync { _shouldStopCompletely }
+    }
+
     // MARK: - Dictionaries
-    
+
     /// Generic / default dictionary for normal open.
     private func defaultDictionary(transport: RTSPTransport, useHWAccel: Bool) -> OpaquePointer? {
         var dict: OpaquePointer? = nil
-        
+
         av_dict_set(&dict, "rtsp_transport", transport.rawValue, 0)
-        
+
         // Possibly set a read timeout in microseconds, etc.
         av_dict_set(&dict, "stimeout", "3000000", 0) // 3 seconds
         av_dict_set(&dict, "max_delay", "500000", 0) // 0.5 seconds
-        
+
         // Optional hardware accel placeholder (videotoolbox or others).
         if useHWAccel {
-            // This alone typically isn't enough; real HWaccel requires additional setup.
             av_dict_set(&dict, "hwaccel", "videotoolbox", 0)
         }
         return dict
     }
-    
+
     /// Fast-start dictionary with minimal analysis.
     private func fastStartupDictionary(transport: RTSPTransport, useHWAccel: Bool) -> OpaquePointer? {
         var dict: OpaquePointer? = nil
-        
+
         av_dict_set(&dict, "rtsp_transport", transport.rawValue, 0)
-        
+
         // Smaller analyze durations & buffers
         av_dict_set(&dict, "analyzeduration", "100000", 0) // 0.1s
         av_dict_set(&dict, "probesize", "100000", 0)       // 100 KB
         av_dict_set(&dict, "fflags", "nobuffer", 0)
         av_dict_set(&dict, "flags", "low_delay", 0)
-        
+
         // Possibly also reduce "stimeout" or "max_delay"
         av_dict_set(&dict, "stimeout", "1000000", 0) // 1 second
         av_dict_set(&dict, "max_delay", "250000", 0) // 0.25 seconds
-        
-        // Optional hardware accel placeholder
+
         if useHWAccel {
             av_dict_set(&dict, "hwaccel", "videotoolbox", 0)
         }
         return dict
     }
-    
+
     // MARK: - Public API
-    
-    /**
-     Start streaming from an RTSP `url`, optionally using cached `RTSPInfo`.
-     
-     - parameter url: The RTSP URL to open.
-     - parameter initialInfo: Previously cached `RTSPInfo` if known (used for an aggressive skip).
-     - parameter transport: .tcp, .udp, or .udpMulticast
-     - parameter useHWAccel: Whether to attempt hardware acceleration
-     - parameter onStreamInfoUpdate: Callback triggered when new or updated RTSPInfo is discovered
-     */
+
     func startStream(
         url: String,
         initialInfo: RTSPInfo? = nil,
@@ -118,163 +125,164 @@ class RTSPStreamManager: ObservableObject {
         useHWAccel: Bool = false,
         onStreamInfoUpdate: ((RTSPInfo?) -> Void)? = nil
     ) {
-        // Move published property update to main thread
+        self.currentStreamURL = url
         DispatchQueue.main.async {
             self.currentStreamURL = url
         }
+
         self.cachedRTSPInfo = initialInfo
         self.onStreamInfoUpdate = onStreamInfoUpdate
         self.fallbackAllowed = true
-        
-        print("RTSPStreamManager - startStream: \(url), haveCached=\(initialInfo != nil)")
-        
-        openStream(url: url, transport: transport, useHWAccel: useHWAccel)
+        self.decodeFailureCount = 0
+        self.streamParameters = StreamParameters(url: url, transport: transport, useHWAccel: useHWAccel)
+
+        setPendingRestart(false)
+        setShouldStopCompletely(false)
+
+        ffQueue.async { [weak self] in
+            guard let self else { return }
+            self.abortFlag.flag = 0
+            self.openCurrentStreamLocked()
+        }
     }
-    
+
     /// Stop the current stream.
     func stopStream() {
-        guard currentStreamURL != nil else {
+        guard currentStreamURL != nil || isDecoding else {
             print("RTSPStreamManager - Stop requested but no active stream")
             return
         }
-        
+
         print("RTSPStreamManager - Stopping stream: \(currentStreamURL ?? "None")")
-        isRunning = false
-        
+        setShouldStopCompletely(true)
+        setPendingRestart(false)
+        abortFlag.flag = 1
+
+        let waitResult = loopGroup.wait(timeout: .now() + 2)
+        if waitResult == .timedOut {
+            print("RTSPStreamManager - ⚠️ Timed out waiting for decode loop to exit")
+        }
+
+        ffQueue.async { [weak self] in
+            guard let self else { return }
+            if !self.isDecoding {
+                self.safeTearDownLocked()
+            }
+            self.abortFlag.flag = 0
+            self.isDecoding = false
+            self.setShouldStopCompletely(false)
+            self.setPendingRestart(false)
+        }
+
         DispatchQueue.main.async {
             self.currentStreamURL = nil
         }
-        
-        // Wait briefly to ensure the decoding loop has stopped
-        Thread.sleep(forTimeInterval: 0.2)
-        
-        cleanupResources()
-        
+
         print("RTSPStreamManager - ✅ Stream stopped and resources cleaned up")
     }
-    
+
     deinit {
         stopStream()
     }
-    
-    // MARK: - Internal: openStream
-    
-    private func openStream(url: String, transport: RTSPTransport, useHWAccel: Bool) {
-        guard !url.contains("Not set") else { return }
-        
+
+    // MARK: - Stream Opening
+
+    private func openCurrentStreamLocked() {
+        guard let params = streamParameters else { return }
+
         if let info = cachedRTSPInfo {
-            // We have prior info => skip find_stream_info if possible
             print("RTSPStreamManager - Using AGGRESSIVE open with cached info: \(info.debugDescription)")
-            openStreamAggressive(url: url, transport: transport, useHWAccel: useHWAccel, info: info)
+            openStreamAggressiveLocked(params: params, info: info)
         } else {
-            // No cached info => do full approach
             print("RTSPStreamManager - No cached info, calling openStreamDefault")
-            openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
+            openStreamDefaultLocked(params: params)
         }
     }
-    
-    // MARK: - 1) Full / Default open with avformat_find_stream_info
-    
-    private func openStreamDefault(url: String, transport: RTSPTransport, useHWAccel: Bool) {
-        var options: OpaquePointer? = defaultDictionary(transport: transport, useHWAccel: useHWAccel)
+
+    private func openStreamDefaultLocked(params: StreamParameters) {
+        var options: OpaquePointer? = defaultDictionary(transport: params.transport, useHWAccel: params.useHWAccel)
+
+        var formatCtx: UnsafeMutablePointer<AVFormatContext>? = nil
+        let openResult = avformat_open_input(&formatCtx, params.url, nil, &options)
         av_dict_free(&options)
-        
-        var formatContext: UnsafeMutablePointer<AVFormatContext>? = nil
-        guard avformat_open_input(&formatContext, url, nil, nil) >= 0, let validCtx = formatContext else {
-            print("RTSPStreamManager - Failed to open input: \(url)")
+
+        guard openResult >= 0, let validCtx = formatCtx else {
+            print("RTSPStreamManager - Failed to open input: \(params.url) error=\(av_err2str(openResult))")
             return
         }
-        self.formatContext = validCtx
-        
-        // Full analysis
+        formatContext = validCtx
+        ff_install_interrupt_cb(validCtx, &abortFlag)
+
         guard avformat_find_stream_info(validCtx, nil) >= 0 else {
             print("RTSPStreamManager - ❌ openStreamDefault: avformat_find_stream_info failed")
-            cleanupResources()
+            safeTearDownLocked()
             return
         }
         print("RTSPStreamManager - ✅ openStreamDefault: found stream info")
-        
-        // Find the video stream
-        self.videoStreamIndex = Int32(-1)
+
+        videoStreamIndex = -1
         for i in 0..<Int(validCtx.pointee.nb_streams) {
-            let stream = validCtx.pointee.streams[i]
-            print("RTSPStreamManager - Stream[\(i)] type: \(stream?.pointee.codecpar.pointee.codec_type.rawValue ?? -1)")
-            if stream?.pointee.codecpar.pointee.codec_type == AVMEDIA_TYPE_VIDEO {
+            if let stream = validCtx.pointee.streams[i],
+               stream.pointee.codecpar.pointee.codec_type == AVMEDIA_TYPE_VIDEO {
                 videoStreamIndex = Int32(i)
                 break
             }
         }
-        print("RTSPStreamManager - Found videoStreamIndex: \(videoStreamIndex)")
-        
-        guard videoStreamIndex != -1 else {
+
+        guard videoStreamIndex != -1,
+              let codecParams = validCtx.pointee.streams[Int(videoStreamIndex)]?.pointee.codecpar else {
             print("RTSPStreamManager - No video stream found in default open")
+            safeTearDownLocked()
             return
         }
-        
-        guard let codecParams = validCtx.pointee.streams[Int(videoStreamIndex)]?.pointee.codecpar else {
-            print("RTSPStreamManager - Failed to get codec parameters in default open")
-            return
-        }
-        
-        print("""
-        RTSPStreamManager - Codec Parameters:
-        - codec_id: \(codecParams.pointee.codec_id.rawValue)
-        - width: \(codecParams.pointee.width)
-        - height: \(codecParams.pointee.height)
-        - format: \(codecParams.pointee.format)
-        - bit_rate: \(codecParams.pointee.bit_rate)
-        - extradata_size: \(codecParams.pointee.extradata_size)
-        """)
-        
+
         guard let codec = avcodec_find_decoder(codecParams.pointee.codec_id) else {
             print("RTSPStreamManager - Failed to find decoder in default open")
+            safeTearDownLocked()
             return
         }
-        print("RTSPStreamManager - Found codec: \(String(cString: codec.pointee.name))")
-        
+
         codecContext = avcodec_alloc_context3(codec)
         guard let codecCtx = codecContext else {
             print("RTSPStreamManager - Failed to alloc codec context in default open")
+            safeTearDownLocked()
             return
         }
-        
+
         guard avcodec_parameters_to_context(codecCtx, codecParams) >= 0 else {
             print("RTSPStreamManager - Failed avcodec_parameters_to_context in default open")
+            safeTearDownLocked()
             return
         }
-        // Soft-enable VideoToolbox: try to set up hw device; ignore errors and continue in software
+
         let vtSetupDefault = ssa_setup_videotoolbox(codecCtx)
         if vtSetupDefault >= 0, !didLogVTReady {
             print("RTSPStreamManager - VideoToolbox hwaccel available (soft-enabled)")
             didLogVTReady = true
         }
-        
+
         let resCodecOpen = avcodec_open2(codecCtx, codec, nil)
         guard resCodecOpen >= 0 else {
             print("RTSPStreamManager - Failed avcodec_open2 in default open: \(av_err2str(resCodecOpen))")
+            safeTearDownLocked()
             return
         }
-        
-        // Allocate frame/packet
-        frame = av_frame_alloc()
-        packet = av_packet_alloc()
-        
+
         // Cache discovered stream info for next time
         let discoveredCodecID = Int32(codecParams.pointee.codec_id.rawValue)
         let discoveredWidth = Int(codecParams.pointee.width)
         let discoveredHeight = Int(codecParams.pointee.height)
         let discoveredFormat = Int(codecParams.pointee.format)
         let discoveredBitRate = Int64(codecParams.pointee.bit_rate)
-        let discoveredVideoStreamIndex = self.videoStreamIndex
-        
-        // Extract extradata if present
+        let discoveredVideoStreamIndex = videoStreamIndex
+
         var extradataData: Data? = nil
         if codecParams.pointee.extradata_size > 0,
            let ptr = codecParams.pointee.extradata {
             let size = Int(codecParams.pointee.extradata_size)
             extradataData = Data(bytes: ptr, count: size)
         }
-        
+
         let newInfo = RTSPInfo(codecID: discoveredCodecID,
                                width: discoveredWidth,
                                height: discoveredHeight,
@@ -282,74 +290,63 @@ class RTSPStreamManager: ObservableObject {
                                bitRate: discoveredBitRate,
                                videoStreamIndex: discoveredVideoStreamIndex,
                                extraData: extradataData)
-        
-        // Notify the caller that we've discovered new info
+
         DispatchQueue.main.async {
             self.onStreamInfoUpdate?(newInfo)
         }
-        
-        print("RTSPStreamManager - ✅ openStreamDefault complete. Starting decode loop.")
-        decodeFailureCount = 0
-        isRunning = true
-        startDecodingLoop(url: url, transport: transport, useHWAccel: useHWAccel)
-    }
-    
-    // MARK: - 2) Aggressive open that skips find_stream_info
-    
-    private func openStreamAggressive(url: String,
-                                      transport: RTSPTransport,
-                                      useHWAccel: Bool,
-                                      info: RTSPInfo) {
-        print("RTSPStreamManager - openStreamAggressive: skipping avformat_find_stream_info")
-        
-        // Minimal dictionary
-        var options: OpaquePointer? = fastStartupDictionary(transport: transport, useHWAccel: useHWAccel)
-        
-        var formatCtx: UnsafeMutablePointer<AVFormatContext>? = nil
-        let openRes = avformat_open_input(&formatCtx, url, nil, &options)
-        av_dict_free(&options)
-        
-        guard openRes >= 0, let validFormatCtx = formatCtx else {
-            print("RTSPStreamManager - ❌ Aggressive open: avformat_open_input failed")
-            fallbackIfNeeded(url: url, transport: transport, useHWAccel: useHWAccel, whereFailed: "aggressive_open_input")
+
+        if getShouldStopCompletely() {
+            print("RTSPStreamManager - Stop requested before decode loop start; aborting default open")
+            safeTearDownLocked()
             return
         }
-        self.formatContext = validFormatCtx
-        
-        // Skip avformat_find_stream_info entirely
-        // Some RTSP servers might automatically parse a single stream index
+
+        decodeFailureCount = 0
+        isDecoding = true
+        startDecodingLoopLocked(with: params)
+    }
+
+    private func openStreamAggressiveLocked(params: StreamParameters, info: RTSPInfo) {
+        var options: OpaquePointer? = fastStartupDictionary(transport: params.transport, useHWAccel: params.useHWAccel)
+
+        var formatCtx: UnsafeMutablePointer<AVFormatContext>? = nil
+        let openRes = avformat_open_input(&formatCtx, params.url, nil, &options)
+        av_dict_free(&options)
+
+        guard openRes >= 0, let validFormatCtx = formatCtx else {
+            print("RTSPStreamManager - ❌ Aggressive open: avformat_open_input failed: \(av_err2str(openRes))")
+            fallbackAfterAggressiveFailureLocked(params: params, reason: "aggressive_open_input")
+            return
+        }
+        formatContext = validFormatCtx
+        ff_install_interrupt_cb(validFormatCtx, &abortFlag)
+
         guard validFormatCtx.pointee.nb_streams > 0 else {
             print("RTSPStreamManager - No streams found in aggressive open")
-            fallbackIfNeeded(url: url, transport: transport, useHWAccel: useHWAccel, whereFailed: "no_streams_aggressive")
+            fallbackAfterAggressiveFailureLocked(params: params, reason: "no_streams_aggressive")
             return
         }
-        
-        // Find the video stream
-        self.videoStreamIndex = info.videoStreamIndex
-        print("RTSPStreamManager - Using videoStreamIndex: \(videoStreamIndex)")
-        
-        // Create codec context from the cached info
+
+        videoStreamIndex = info.videoStreamIndex
+
         let wantedCodecID = AVCodecID(UInt32(info.codecID))
         guard let codec = avcodec_find_decoder(wantedCodecID) else {
             print("RTSPStreamManager - ❌ Aggressive open: failed avcodec_find_decoder for \(info.codecID)")
-            fallbackIfNeeded(url: url, transport: transport, useHWAccel: useHWAccel, whereFailed: "find_decoder_aggressive")
+            fallbackAfterAggressiveFailureLocked(params: params, reason: "find_decoder_aggressive")
             return
         }
-        
+
         codecContext = avcodec_alloc_context3(codec)
         guard let codecCtx = codecContext else {
             print("RTSPStreamManager - ❌ Aggressive open: avcodec_alloc_context3 failed")
+            fallbackAfterAggressiveFailureLocked(params: params, reason: "alloc_context_aggressive")
             return
         }
-        // examine memory first, dont just use guard.
-        // rewrite RTSPStreamManager in objc.  
-        
-        // Manually set known parameters
+
         codecCtx.pointee.codec_id = wantedCodecID
-        codecCtx.pointee.width    = Int32(info.width)
-        codecCtx.pointee.height   = Int32(info.height)
-        
-        // If we have extradata, feed it in
+        codecCtx.pointee.width = Int32(info.width)
+        codecCtx.pointee.height = Int32(info.height)
+
         if let extraData = info.extraData, !extraData.isEmpty {
             let paddedSize = extraData.count + Int(AV_INPUT_BUFFER_PADDING_SIZE)
             let extradataPtr = av_malloc(paddedSize).assumingMemoryBound(to: UInt8.self)
@@ -357,186 +354,250 @@ class RTSPStreamManager: ObservableObject {
             extraData.withUnsafeBytes { srcPtr in
                 memcpy(extradataPtr, srcPtr.baseAddress!, extraData.count)
             }
-            
+
             codecCtx.pointee.extradata = extradataPtr
             codecCtx.pointee.extradata_size = Int32(extraData.count)
         }
-        
-        // Soft-enable VideoToolbox
+
         let vtSetup = ssa_setup_videotoolbox(codecCtx)
         if vtSetup >= 0, !didLogVTReady {
             print("RTSPStreamManager - VideoToolbox hwaccel available (soft-enabled)")
             didLogVTReady = true
         }
+
         let openCodecRes = avcodec_open2(codecCtx, codec, nil)
         if openCodecRes < 0 {
             print("RTSPStreamManager - ❌ Aggressive open: avcodec_open2 failed: \(av_err2str(openCodecRes))")
-            fallbackIfNeeded(url: url, transport: transport, useHWAccel: useHWAccel, whereFailed: "avcodec_open2_aggressive")
+            fallbackAfterAggressiveFailureLocked(params: params, reason: "avcodec_open2_aggressive")
             return
         }
-        
-        // Allocate frame/packet
-        frame = av_frame_alloc()
-        packet = av_packet_alloc()
-        
-        print("RTSPStreamManager - ✅ Aggressive open success. Beginning decode loop.")
-        decodeFailureCount = 0
-        isRunning = true
-        startDecodingLoop(url: url, transport: transport, useHWAccel: useHWAccel)
-    }
-    
-    // MARK: - Fallback Logic
-    
-    private func fallbackIfNeeded(url: String, transport: RTSPTransport, useHWAccel: Bool, whereFailed: String) {
-        // Only fallback if we haven't used fallback yet, and we had a cachedRTSPInfo
-        if fallbackAllowed && cachedRTSPInfo != nil {
-            print("RTSPStreamManager - ⚠️ Fallback triggered after \(whereFailed). Clearing cached info & re-opening with full analysis.")
-            fallbackAllowed = false
-            cachedRTSPInfo = nil
-            cleanupResources()
-            openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
-        } else {
-            print("RTSPStreamManager - ❌ Fallback not possible or no cached info. Stopping here.")
-        }
-    }
-    
-    // MARK: - Decode Loop
-    
-    private func startDecodingLoop(url: String, transport: RTSPTransport, useHWAccel: Bool) {
-        print("RTSPStreamManager - Starting decode loop for: \(url)")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else {
-                print("RTSPStreamManager - ❌ Decode loop aborted - self was nil")
-                return
-            }
-            
-            while self.isRunning {
-                if !self.readNextFrame() {
-                    self.decodeFailureCount += 1
-                    // If we detect repeated failures early => fallback
-                    if self.fallbackAllowed,
-                       self.cachedRTSPInfo != nil,
-                       self.decodeFailureCount >= self.maxEarlyFailuresBeforeFallback {
-                        
-                        print("RTSPStreamManager - ⚠️ Too many early decode failures, clearing cached info, fallback to default.")
-                        self.stopStream()
-                        self.cachedRTSPInfo = nil
-                        self.fallbackAllowed = false
-                        
-                        // Try again with default
-                        self.openStreamDefault(url: url, transport: transport, useHWAccel: useHWAccel)
-                        break
-                    }
-                    
-                    print("RTSPStreamManager - sleeping 0.5 for decode failure")
-                    Thread.sleep(forTimeInterval: 0.5)
-                } else {
-                    self.decodeFailureCount = 0
-                }
-                
-                Thread.sleep(forTimeInterval: 0.01) // 0.01 = ~10fps
-            }
-        }
-    }
-    
-    private func readNextFrame() -> Bool {
-        guard let formatContext = formatContext,
-              let codecContext = codecContext,
-              let frame = frame,
-              let packet = packet else {
-            print("RTSPStreamManager - Nil contexts in readNextFrame")
-            return false
-        }
-        
-        // Read frame with additional error handling
-        let readResult = av_read_frame(formatContext, packet)
-        if readResult < 0 {
-            switch readResult {
-            case AVERROR_EOF:
-                print("RTSPStreamManager - End of stream reached")
-                stopStream()
-            case AVERROR(EAGAIN):
-                // Resource temporarily unavailable, can retry
-                return false
-            case AVERROR(EINVAL):
-                print("RTSPStreamManager - Invalid argument error in av_read_frame")
-                return false
-            case AVERROR(EIO):
-                print("RTSPStreamManager - I/O error in av_read_frame")
-                return false
-            default:
-                print("RTSPStreamManager - Error reading frame: \(av_err2str(readResult))")
-                return false
-            }
-            return false
-        }
-        
-        // Ignore packets that aren't video
-        if packet.pointee.stream_index != self.videoStreamIndex {
-            av_packet_unref(packet)
-            return true
-        }
-        
-        let sendResult = avcodec_send_packet(codecContext, packet)
-        if sendResult < 0 {
-            print("RTSPStreamManager - Error sending packet: \(av_err2str(sendResult))")
-            av_packet_unref(packet)
-            return false
-        }
-        let receiveResult = avcodec_receive_frame(codecContext, frame)
-        if receiveResult >= 0 {
-            // If we received a hardware frame, transfer to software frame for rendering
-            if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
-                if !didLogVTActive {
-                    print("RTSPStreamManager - Using VideoToolbox hardware decoding")
-                    didLogVTActive = true
-                }
-                if let swFrame = av_frame_alloc() {
-                    if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
-                        convertFrameToImage(swFrame)
-                    } else {
-                        // Failed to transfer, skip rendering this frame
-                    }
-                    var tmp: UnsafeMutablePointer<AVFrame>? = swFrame
-                    av_frame_free(&tmp)
-                }
-            } else {
-                if !didLogSWActive {
-                    print("RTSPStreamManager - Using software decoding")
-                    didLogSWActive = true
-                }
-                convertFrameToImage(frame)
-            }
-        } else if receiveResult != AVERROR(EAGAIN) {
-            print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
+
+        if getShouldStopCompletely() {
+            print("RTSPStreamManager - Stop requested before decode loop start; aborting aggressive open")
+            safeTearDownLocked()
+            return
         }
 
-        av_packet_unref(packet)
+        decodeFailureCount = 0
+        isDecoding = true
+        startDecodingLoopLocked(with: params)
+    }
+
+    private func fallbackAfterAggressiveFailureLocked(params: StreamParameters, reason: String) {
+        guard fallbackAllowed else {
+            print("RTSPStreamManager - ❌ Fallback not possible (already used) after \(reason)")
+            safeTearDownLocked()
+            return
+        }
+
+        print("RTSPStreamManager - ⚠️ Fallback triggered after \(reason). Clearing cached info & re-opening with full analysis.")
+        fallbackAllowed = false
+        cachedRTSPInfo = nil
+        safeTearDownLocked()
+        openStreamDefaultLocked(params: params)
+    }
+
+    // MARK: - Decode Loop
+
+    private func startDecodingLoopLocked(with params: StreamParameters) {
+        guard let formatContext = formatContext,
+              let codecContext = codecContext else {
+            print("RTSPStreamManager - Nil contexts; cannot start decoding loop")
+            safeTearDownLocked()
+            return
+        }
+
+        if videoStreamIndex == -1 {
+            print("RTSPStreamManager - Invalid video stream index")
+            safeTearDownLocked()
+            return
+        }
+
+        loopGroup.enter()
+
+        ffQueue.async { [weak self] in
+            guard let self else { return }
+            self.runDecodeLoop(formatContext: formatContext, codecContext: codecContext, params: params)
+        }
+    }
+
+    private func runDecodeLoop(formatContext: UnsafeMutablePointer<AVFormatContext>,
+                                codecContext: UnsafeMutablePointer<AVCodecContext>,
+                                params: StreamParameters) {
+        guard let packet = av_packet_alloc(), let frame = av_frame_alloc() else {
+            print("RTSPStreamManager - ❌ Failed to allocate packet/frame for decode loop")
+            safeTearDownLocked()
+            loopGroup.leave()
+            return
+        }
+
+        defer {
+            var pkt: UnsafeMutablePointer<AVPacket>? = packet
+            av_packet_free(&pkt)
+            var frm: UnsafeMutablePointer<AVFrame>? = frame
+            av_frame_free(&frm)
+        }
+
+        while isDecoding {
+            if abortFlag.flag != 0 {
+                break
+            }
+
+            let readResult = av_read_frame(formatContext, packet)
+
+            if readResult == fferr_eagain() {
+                continue
+            }
+
+            if readResult == fferr_eof() {
+                print("RTSPStreamManager - End of stream signaled by FFmpeg")
+                break
+            }
+
+            if readResult < 0 {
+                print("RTSPStreamManager - Error reading frame: \(av_err2str(readResult))")
+                decodeFailureCount += 1
+                if shouldFallbackDueToFailuresLocked() {
+                    av_packet_unref(packet)
+                    break
+                }
+                av_packet_unref(packet)
+                continue
+            }
+
+            if packet.pointee.stream_index != videoStreamIndex {
+                av_packet_unref(packet)
+                continue
+            }
+
+            let sendResult = avcodec_send_packet(codecContext, packet)
+            if sendResult < 0 {
+                print("RTSPStreamManager - Error sending packet: \(av_err2str(sendResult))")
+                decodeFailureCount += 1
+                av_packet_unref(packet)
+                if shouldFallbackDueToFailuresLocked() {
+                    break
+                }
+                continue
+            }
+
+            while abortFlag.flag == 0 {
+                let receiveResult = avcodec_receive_frame(codecContext, frame)
+                if receiveResult == 0 {
+                    decodeFailureCount = 0
+                    handleDecodedFrame(frame)
+                } else if receiveResult == fferr_eagain() {
+                    break
+                } else if receiveResult == fferr_eof() {
+                    isDecoding = false
+                    break
+                } else {
+                    print("RTSPStreamManager - Error receiving frame: \(av_err2str(receiveResult))")
+                    decodeFailureCount += 1
+                    break
+                }
+            }
+
+            av_packet_unref(packet)
+
+            if shouldFallbackDueToFailuresLocked() {
+                break
+            }
+
+            if getShouldStopCompletely() {
+                break
+            }
+        }
+
+        isDecoding = false
+
+        let shouldRestart = getPendingRestart()
+        let shouldStop = getShouldStopCompletely()
+
+        setPendingRestart(false)
+
+        safeTearDownLocked()
+
+        loopGroup.leave()
+
+        abortFlag.flag = 0
+
+        if shouldRestart && !shouldStop {
+            print("RTSPStreamManager - Restarting stream with default analysis after fallback")
+            openStreamDefaultLocked(params: params)
+        } else if shouldStop {
+            setShouldStopCompletely(false)
+        }
+    }
+
+    private func shouldFallbackDueToFailuresLocked() -> Bool {
+        guard fallbackAllowed, cachedRTSPInfo != nil else { return false }
+        if decodeFailureCount < maxEarlyFailuresBeforeFallback {
+            return false
+        }
+
+        print("RTSPStreamManager - ⚠️ Too many early decode failures, scheduling fallback to default stream open")
+        fallbackAllowed = false
+        cachedRTSPInfo = nil
+        setPendingRestart(true)
+        abortFlag.flag = 1
         return true
     }
-    
+
+    private func handleDecodedFrame(_ frame: UnsafeMutablePointer<AVFrame>) {
+        if AVPixelFormat(rawValue: frame.pointee.format) == AV_PIX_FMT_VIDEOTOOLBOX {
+            if !didLogVTActive {
+                print("RTSPStreamManager - Using VideoToolbox hardware decoding")
+                didLogVTActive = true
+            }
+            guard let swFrame = av_frame_alloc() else { return }
+            defer {
+                var tmp: UnsafeMutablePointer<AVFrame>? = swFrame
+                av_frame_free(&tmp)
+            }
+            if av_hwframe_transfer_data(swFrame, frame, 0) == 0 {
+                convertFrameToImage(swFrame)
+            }
+        } else {
+            if !didLogSWActive {
+                print("RTSPStreamManager - Using software decoding")
+                didLogSWActive = true
+            }
+            convertFrameToImage(frame)
+        }
+    }
+
     // MARK: - Frame Conversion
-    
+
     private func convertFrameToImage(_ frame: UnsafeMutablePointer<AVFrame>) {
         let width = Int(frame.pointee.width)
         let height = Int(frame.pointee.height)
-        
+
+        guard width > 0, height > 0 else { return }
+
+        if frame.pointee.linesize.0 < 0 {
+            // Unsupported negative stride; skip frame.
+            return
+        }
+
         guard let rgbFrame = av_frame_alloc() else { return }
         defer {
-            var temp: UnsafeMutablePointer<AVFrame>? = rgbFrame
-            av_frame_free(&temp)
+            var tmp: UnsafeMutablePointer<AVFrame>? = rgbFrame
+            av_frame_free(&tmp)
         }
-        
-        rgbFrame.pointee.format = Int32(AV_PIX_FMT_RGB24.rawValue)
-        rgbFrame.pointee.width  = Int32(width)
-        rgbFrame.pointee.height = Int32(height)
-        
-        guard av_frame_get_buffer(rgbFrame, 0) >= 0 else { return }
-        
+
+        let imageAllocResult = withUnsafeMutablePointer(to: &rgbFrame.pointee.data.0) { dataPtr -> Int32 in
+            return withUnsafeMutablePointer(to: &rgbFrame.pointee.linesize.0) { linesizePtr -> Int32 in
+                av_image_alloc(dataPtr, linesizePtr, Int32(width), Int32(height), AV_PIX_FMT_RGB24, 1)
+            }
+        }
+        guard imageAllocResult >= 0 else { return }
+        defer { av_freep(&rgbFrame.pointee.data.0) }
+
         guard let swsContext = sws_getContext(
             Int32(width),
             Int32(height),
-            AVPixelFormat(frame.pointee.format),
+            AVPixelFormat(rawValue: frame.pointee.format),
             Int32(width),
             Int32(height),
             AV_PIX_FMT_RGB24,
@@ -545,10 +606,9 @@ class RTSPStreamManager: ObservableObject {
             nil,
             nil
         ) else { return }
-        
+
         defer { sws_freeContext(swsContext) }
-        
-        // src/dst pointers
+
         var dstDataPointers: [UnsafeMutablePointer<UInt8>?] = [
             rgbFrame.pointee.data.0,
             rgbFrame.pointee.data.1,
@@ -569,7 +629,7 @@ class RTSPStreamManager: ObservableObject {
             UnsafePointer(frame.pointee.data.6),
             UnsafePointer(frame.pointee.data.7)
         ]
-        
+
         let srcLinesize: [Int32] = [
             frame.pointee.linesize.0,
             frame.pointee.linesize.1,
@@ -590,23 +650,34 @@ class RTSPStreamManager: ObservableObject {
             rgbFrame.pointee.linesize.6,
             rgbFrame.pointee.linesize.7
         ]
-        
-        let result = sws_scale(
-            swsContext,
-            srcDataPointers,
-            srcLinesize,
-            0,
-            Int32(height),
-            &dstDataPointers,
-            dstLinesize
-        )
+
+        let result = dstDataPointers.withUnsafeMutableBufferPointer { dstBuffer -> Int32 in
+            guard let dstBase = dstBuffer.baseAddress else { return -1 }
+            return srcDataPointers.withUnsafeBufferPointer { srcBuffer -> Int32 in
+                guard let srcBase = srcBuffer.baseAddress else { return -1 }
+                return srcLinesize.withUnsafeBufferPointer { srcLineBuffer -> Int32 in
+                    guard let srcLineBase = srcLineBuffer.baseAddress else { return -1 }
+                    return dstLinesize.withUnsafeBufferPointer { dstLineBuffer -> Int32 in
+                        guard let dstLineBase = dstLineBuffer.baseAddress else { return -1 }
+                        return sws_scale(
+                            swsContext,
+                            srcBase,
+                            srcLineBase,
+                            0,
+                            Int32(height),
+                            dstBase,
+                            dstLineBase
+                        )
+                    }
+                }
+            }
+        }
         guard result >= 0 else { return }
-        
-        // Create UIImage
+
         let bytesPerRow = width * 3
         guard let rgbData = rgbFrame.pointee.data.0 else { return }
         let data = Data(bytes: rgbData, count: height * bytesPerRow)
-        
+
         guard let provider = CGDataProvider(data: data as CFData) else { return }
         if let cgImage = CGImage(
             width: width,
@@ -626,12 +697,11 @@ class RTSPStreamManager: ObservableObject {
             }
         }
     }
-    
+
     // MARK: - Cleanup
-    
-    private func cleanupResources() {
+
+    private func safeTearDownLocked() {
         if let codecContext = codecContext {
-            // If we allocated extradata, free it
             if let ptr = codecContext.pointee.extradata {
                 av_free(ptr)
                 codecContext.pointee.extradata = nil
@@ -640,30 +710,18 @@ class RTSPStreamManager: ObservableObject {
             avcodec_free_context(&tempCodecContext)
             self.codecContext = nil
         }
-        
+
         if let formatContext = formatContext {
             var tempFormatContext: UnsafeMutablePointer<AVFormatContext>? = formatContext
             avformat_close_input(&tempFormatContext)
             self.formatContext = nil
         }
-        
-        if let frame = frame {
-            var tempFrame: UnsafeMutablePointer<AVFrame>? = frame
-            av_frame_free(&tempFrame)
-            self.frame = nil
-        }
-        
-        if let packet = packet {
-            var tempPacket: UnsafeMutablePointer<AVPacket>? = packet
-            av_packet_free(&tempPacket)
-            self.packet = nil
-        }
-        
-        self.videoStreamIndex = -1
-        self.didLogVTReady = false
-        self.didLogVTActive = false
-        self.didLogSWActive = false
-        
+
+        videoStreamIndex = -1
+        didLogVTReady = false
+        didLogVTActive = false
+        didLogSWActive = false
+
         DispatchQueue.main.async {
             self.currentFrame = nil
         }

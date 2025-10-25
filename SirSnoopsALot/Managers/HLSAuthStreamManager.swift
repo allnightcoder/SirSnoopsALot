@@ -355,7 +355,7 @@ class HLSAuthStreamManager: ObservableObject {
         // Read a packet from the stream
         let readResult = av_read_frame(formatContext, packet)
         if readResult < 0 {
-            if readResult == AVERROR_EOF {
+            if readResult == FFmpegErrorEOF {
                 print("HLSAuthStreamManager - End of stream, flushing decoder")
                 // Flush the decoder by sending a null packet
                 sendPacketToDecoder(nil)
@@ -396,7 +396,7 @@ class HLSAuthStreamManager: ObservableObject {
         // Loop to receive all available frames from the decoder
         while true {
             let receiveResult = avcodec_receive_frame(codecContext, frame)
-            if receiveResult == AVERROR(EAGAIN) || receiveResult == AVERROR_EOF {
+            if receiveResult == FFmpegErrorEAGAIN || receiveResult == FFmpegErrorEOF {
                 // EAGAIN: Decoder needs more data
                 // EOF: Decoder is fully flushed
                 break
@@ -529,15 +529,27 @@ class HLSAuthStreamManager: ObservableObject {
             rgbFrame.pointee.linesize.7
         ]
 
-        let result = sws_scale(
-            swsContext,
-            srcDataPointers,
-            srcLinesize,
-            0,
-            Int32(height),
-            &dstDataPointers,
-            dstLinesize
-        )
+        let result = dstDataPointers.withUnsafeMutableBufferPointer { dstBuffer -> Int32 in
+            guard let dstBase = dstBuffer.baseAddress else { return -1 }
+            return srcDataPointers.withUnsafeBufferPointer { srcBuffer -> Int32 in
+                guard let srcBase = srcBuffer.baseAddress else { return -1 }
+                return srcLinesize.withUnsafeBufferPointer { srcLineBuffer -> Int32 in
+                    guard let srcLineBase = srcLineBuffer.baseAddress else { return -1 }
+                    return dstLinesize.withUnsafeBufferPointer { dstLineBuffer -> Int32 in
+                        guard let dstLineBase = dstLineBuffer.baseAddress else { return -1 }
+                        return sws_scale(
+                            swsContext,
+                            srcBase,
+                            srcLineBase,
+                            0,
+                            Int32(height),
+                            dstBase,
+                            dstLineBase
+                        )
+                    }
+                }
+            }
+        }
         guard result >= 0 else { return }
 
         // Create UIImage

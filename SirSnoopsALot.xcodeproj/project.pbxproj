@@ -12,6 +12,7 @@
 		13E708B62D3F1D13004283E8 /* libz.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B52D3F1D13004283E8 /* libz.tbd */; };
 		13E708B82D3F1D1D004283E8 /* libiconv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 13E708B72D3F1D1D004283E8 /* libiconv.tbd */; };
 		13FFAA022D5A0B1200AABBCC /* FFmpegHWAccel.c in Sources */ = {isa = PBXBuildFile; fileRef = 13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */; };
+		13FFAA062D5A0B1300AABBCC /* FFmpegInterrupt.c in Sources */ = {isa = PBXBuildFile; fileRef = 13FFAA052D5A0B1300AABBCC /* FFmpegInterrupt.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -37,6 +38,7 @@
 		13E708B52D3F1D13004283E8 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
 		13E708B72D3F1D1D004283E8 /* libiconv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libiconv.tbd; path = usr/lib/libiconv.tbd; sourceTree = SDKROOT; };
 		13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FFmpegHWAccel.c; sourceTree = "<group>"; };
+		13FFAA052D5A0B1300AABBCC /* FFmpegInterrupt.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FFmpegInterrupt.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -143,6 +145,7 @@
 			isa = PBXGroup;
 			children = (
 				13FFAA012D5A0B1200AABBCC /* FFmpegHWAccel.c */,
+				13FFAA052D5A0B1300AABBCC /* FFmpegInterrupt.c */,
 			);
 			path = BridgingHeaders;
 			sourceTree = "<group>";
@@ -261,6 +264,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				13FFAA022D5A0B1200AABBCC /* FFmpegHWAccel.c in Sources */,
+				13FFAA062D5A0B1300AABBCC /* FFmpegInterrupt.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
